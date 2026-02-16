@@ -22,5 +22,8 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
+run: $(BIN)
+	./$(BIN) examples/dambreak/cal.txt
+
 clean:
 	rm -rf $(OBJ_DIR) $(BIN)

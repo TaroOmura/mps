@@ -21,7 +21,7 @@ def load_csv(filepath):
 
 def main():
     parser = argparse.ArgumentParser(description="MPS 3D結果の可視化")
-    parser.add_argument("--input_dir", default="../output", help="CSVファイルのディレクトリ")
+    parser.add_argument("--input_dir", default="output", help="CSVファイルのディレクトリ")
     parser.add_argument("--save", default=None, help="アニメーションを保存するファイルパス (.mp4 or .gif)")
     parser.add_argument("--interval", type=int, default=100, help="フレーム間隔 [ms]")
     parser.add_argument("--dt", type=float, default=5.0e-4, help="シミュレーションの時間刻み [s]")

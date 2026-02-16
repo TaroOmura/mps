@@ -42,7 +42,7 @@ def main():
     parser.add_argument("--output_interval", type=int, default=100, help="出力間隔 [ステップ]")
 
     # 出力先
-    parser.add_argument("--outdir", type=str, default=".", help="ファイル出力先ディレクトリ")
+    parser.add_argument("--outdir", type=str, default="examples/dambreak", help="ファイル出力先ディレクトリ")
     parser.add_argument("--output_dir", type=str, default="output", help="シミュレーション出力ディレクトリ名")
 
     args = parser.parse_args()

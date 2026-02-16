@@ -37,6 +37,7 @@ void config_set_defaults(SimConfig *config)
     config->t_end           = 2.0;
     config->output_interval = 100;
 
+    config->solver_type     = 0;       /* 0: CG, 1: ICCG */
     config->cg_max_iter     = 10000;
     config->cg_tolerance    = 1.0e-8;
     config->relaxation_coeff = 0.2;
@@ -183,6 +184,8 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->t_end = atof(val_str);
         } else if (strcmp(key, "output_interval") == 0) {
             config->output_interval = atoi(val_str);
+        } else if (strcmp(key, "solver_type") == 0) {
+            config->solver_type = atoi(val_str);
         } else if (strcmp(key, "cg_max_iter") == 0) {
             config->cg_max_iter = atoi(val_str);
         } else if (strcmp(key, "cg_tolerance") == 0) {
@@ -237,6 +240,7 @@ void config_print(const SimConfig *config)
     printf("dt:                   %.2e s\n", config->dt);
     printf("t_end:                %.4f s\n", config->t_end);
     printf("output_interval:      %d steps\n", config->output_interval);
+    printf("solver_type:          %s\n", config->solver_type == 1 ? "ICCG" : "CG");
     printf("cg_max_iter:          %d\n", config->cg_max_iter);
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);

@@ -26,6 +26,7 @@ typedef struct {
     int    output_interval;     /* 出力間隔 [ステップ] */
 
     /* 圧力計算 */
+    int    solver_type;         /* 線形ソルバー (0: CG, 1: ICCG) */
     int    cg_max_iter;         /* CG法の最大反復数 */
     double cg_tolerance;        /* CG法の収束判定閾値 */
     double relaxation_coeff;    /* 圧力の緩和係数 */
