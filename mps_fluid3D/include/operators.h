@@ -1,0 +1,19 @@
+#ifndef OPERATORS_H
+#define OPERATORS_H
+
+#include "particle.h"
+#include "neighbor_search.h"
+
+/* 粒子数密度の計算 */
+void calc_particle_number_density(ParticleSystem *ps, NeighborList *nl);
+
+/* ラプラシアンモデル: 粘性項の計算 (加速度をaccに加算) */
+void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl);
+
+/* 勾配モデル: 圧力勾配による補正加速度をaccに格納 */
+void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl);
+
+/* 自由表面判定 */
+void judge_free_surface(ParticleSystem *ps, double threshold);
+
+#endif /* OPERATORS_H */
