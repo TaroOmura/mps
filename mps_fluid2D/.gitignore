@@ -1,0 +1,9 @@
+# Build artifacts
+obj/
+mps_sim
+
+# Output files
+output/
+
+# macOS
+.DS_Store

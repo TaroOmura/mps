@@ -1,0 +1,18 @@
+# Build
+obj/
+mps_sim
+
+# Simulation output
+output/
+
+# Swap files
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
