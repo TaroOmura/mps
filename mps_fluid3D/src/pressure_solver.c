@@ -63,6 +63,7 @@ static int solve_cg(const double *A, double *x, const double *b,
         }
 
         double rr_new = dot_product(r, r, n);
+        if (rr < 1.0e-60) break;
         double beta = rr_new / rr;
 
         for (int i = 0; i < n; i++) {
@@ -99,8 +100,8 @@ static void ic_factorize(const double *A, double *L, int n)
         }
         double diag = A[k * n + k] - sum;
         if (diag <= 0.0) {
-            /* 対角が非正の場合、元の対角値で代替 */
-            diag = A[k * n + k];
+            /* 対角が非正の場合、元の対角値で代替。それもゼロ以下なら微小正値を使用 */
+            diag = A[k * n + k] > 0.0 ? A[k * n + k] : 1.0e-30;
         }
         L[k * n + k] = sqrt(diag);
 
@@ -222,6 +223,7 @@ static int solve_iccg(const double *A, double *x, const double *b,
         precond_solve(L, r, z, work, n);
 
         double rz_new = dot_product(r, z, n);
+        if (fabs(rz) < 1.0e-60) break;
         double beta = rz_new / rz;
 
         for (int i = 0; i < n; i++) {
@@ -247,21 +249,30 @@ static int solve_iccg(const double *A, double *x, const double *b,
 void solve_pressure(ParticleSystem *ps, NeighborList *nl)
 {
     int n = ps->num;
-    double re = g_config->influence_radius;
+    double re = g_config->influence_radius_lap;
     double n0 = ps->n0;
     double lambda = ps->lambda;
     double coeff = 2.0 * DIM / (n0 * lambda);
     double dt = g_config->dt;
     double dt2 = dt * dt;
 
-    /* 未知数のマッピング: 内部流体粒子のみ */
+    /*
+     * 未知数のマッピング
+     *   eq_idx[i] >= 0 : 未知数として求解
+     *   eq_idx[i] == -1: ディリクレ条件 P = 0 として扱う
+     *
+     * ディリクレ条件の対象:
+     *   - 自由表面の流体粒子 (P = 0 の境界条件)
+     *   - ダミー粒子・ゴースト粒子 (圧力計算対象外)
+     */
     int *eq_idx = (int *)malloc(n * sizeof(int));
     int n_eq = 0;
     for (int i = 0; i < n; i++) {
-        if (ps->particles[i].type == FLUID_PARTICLE && !ps->particles[i].on_surface) {
+        if ((ps->particles[i].type == FLUID_PARTICLE && !ps->particles[i].on_surface) ||
+             ps->particles[i].type == WALL_PARTICLE) {
             eq_idx[i] = n_eq++;
         } else {
-            eq_idx[i] = -1;
+            eq_idx[i] = -1;  /* ディリクレ条件: P = 0 */
         }
     }
 
@@ -293,6 +304,7 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
         double sum_w = 0.0;
         for (int k = 0; k < nl->count[i]; k++) {
             int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].type == DUMMY_PARTICLE) continue;
             double r2 = 0.0;
             for (int d = 0; d < DIM; d++) {
                 double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
@@ -302,9 +314,12 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
             double w = kernel_weight(r, re);
 
             if (eq_idx[j] >= 0) {
+                /* 未知数: 非対角成分に追加 */
                 int ej = eq_idx[j];
                 M[ei * n_eq + ej] = -coeff * w;
             }
+            /* ディリクレ条件 P_j = 0 の場合: RHS への寄与は -(-coeff*w)*0 = 0
+             * 対角成分への寄与 (coeff*w) は P_j の値によらず sum_w に加算する */
             sum_w += w;
         }
 
@@ -329,12 +344,12 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
     }
     (void)iters;
 
-    /* 結果を粒子に反映 */
+    /* 結果を粒子に反映 (ディリクレ条件の粒子は P = 0 を適用) */
     for (int i = 0; i < n; i++) {
         if (eq_idx[i] >= 0) {
             ps->particles[i].pressure = x[eq_idx[i]];
         } else {
-            ps->particles[i].pressure = 0.0;
+            ps->particles[i].pressure = 0.0;  /* ディリクレ条件: P = 0 */
         }
     }
 
@@ -342,12 +357,4 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
     free(M);
     free(c);
     free(x);
-}
-
-void clamp_negative_pressure(ParticleSystem *ps)
-{
-    for (int i = 0; i < ps->num; i++) {
-        if (ps->particles[i].pressure < 0.0)
-            ps->particles[i].pressure = 0.0;
-    }
 }

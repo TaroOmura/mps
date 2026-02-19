@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 #include "neighbor_search.h"
 #include "config.h"
 
@@ -55,10 +56,15 @@ void neighbor_search_brute_force(NeighborList *nl, ParticleSystem *ps, double re
             }
 
             if (r2 < re * re) {
-                if (cnt < nl->max_neighbors) {
-                    nl->neighbors[i * nl->max_neighbors + cnt] = j;
-                    cnt++;
+                if (cnt >= nl->max_neighbors) {
+                    fprintf(stderr,
+                            "Error: neighbor count exceeded max_neighbors (%d) for particle %d. "
+                            "Increase max_neighbors in params.txt.\n",
+                            nl->max_neighbors, i);
+                    exit(EXIT_FAILURE);
                 }
+                nl->neighbors[i * nl->max_neighbors + cnt] = j;
+                cnt++;
             }
         }
         nl->count[i] = cnt;

@@ -60,7 +60,7 @@ int particle_system_add(ParticleSystem *ps, double pos[], double vel[], int type
  */
 void particle_system_calc_initial_params(ParticleSystem *ps)
 {
-    double re = g_config->influence_radius;
+    double re = g_config->influence_radius_lap;
     double max_n0 = 0.0;
     double max_lambda_num = 0.0;
 

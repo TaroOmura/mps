@@ -9,7 +9,7 @@
  */
 void calc_particle_number_density(ParticleSystem *ps, NeighborList *nl)
 {
-    double re = g_config->influence_radius;
+    double re = g_config->influence_radius_n;
 
     for (int i = 0; i < ps->num; i++) {
         double ni = 0.0;
@@ -35,7 +35,7 @@ void calc_particle_number_density(ParticleSystem *ps, NeighborList *nl)
  */
 void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
 {
-    double re = g_config->influence_radius;
+    double re = g_config->influence_radius_lap;
     double n0 = ps->n0;
     double lambda = ps->lambda;
     double coeff = 2.0 * DIM / (n0 * lambda);
@@ -75,7 +75,7 @@ void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
  */
 void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
 {
-    double re = g_config->influence_radius;
+    double re = g_config->influence_radius_lap;
     double n0 = ps->n0;
     double grad_coeff = (double)DIM / n0;
 

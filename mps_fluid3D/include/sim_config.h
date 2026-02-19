@@ -10,8 +10,10 @@
 typedef struct {
     /* 粒子パラメータ */
     double particle_distance;   /* 初期粒子間距離 l0 [m] */
-    double influence_ratio;     /* 影響半径の倍率 (re = ratio * l0) */
-    double influence_radius;    /* 影響半径 re [m] (自動計算) */
+    double influence_ratio_lap;  /* ラプラシアン用影響半径の倍率 (re = ratio * l0) */
+    double influence_radius_lap; /* ラプラシアン用影響半径 re [m] (自動計算) */
+    double influence_ratio_n;   /* 粒子数密度用影響半径の倍率 (re_n = ratio_n * l0) */
+    double influence_radius_n;  /* 粒子数密度用影響半径 re_n [m] (自動計算) */
     int    max_neighbors;       /* 1粒子あたり最大近傍数 */
     int    wall_layers;         /* 壁粒子の層数 */
     int    dummy_layers;        /* ダミー粒子の層数*/

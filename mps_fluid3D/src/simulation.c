@@ -13,7 +13,7 @@
 void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
 {
     (void)step;
-    double re = g_config->influence_radius;
+    double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
     double dt = g_config->dt;
 
     /* === 陽的ステップ === */
@@ -88,7 +88,7 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
  */
 void simulation_run(ParticleSystem *ps)
 {
-    double re = g_config->influence_radius;
+    double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
     double dt = g_config->dt;
     int total_steps = (int)(g_config->t_end / dt);
     int out_interval = g_config->output_interval;

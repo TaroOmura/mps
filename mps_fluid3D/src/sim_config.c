@@ -22,8 +22,10 @@ void config_set_defaults(SimConfig *config)
     memset(config, 0, sizeof(SimConfig));
 
     config->particle_distance = 0.025;
-    config->influence_ratio   = 2.1;
-    config->influence_radius  = 2.1 * 0.025;
+    config->influence_ratio_lap  = 2.1;
+    config->influence_radius_lap = 2.1 * 0.025;
+    config->influence_ratio_n = 2.1;
+    config->influence_radius_n = 2.1 * 0.025;
     config->max_neighbors     = 512;
     config->wall_layers       = 2;
     config->dummy_layers      = 2;
@@ -160,8 +162,10 @@ int config_load_params(const char *param_path, SimConfig *config)
 
         if (strcmp(key, "particle_distance") == 0) {
             config->particle_distance = atof(val_str);
-        } else if (strcmp(key, "influence_ratio") == 0) {
-            config->influence_ratio = atof(val_str);
+        } else if (strcmp(key, "influence_ratio_lap") == 0) {
+            config->influence_ratio_lap = atof(val_str);
+        } else if (strcmp(key, "influence_ratio_n") == 0) {
+            config->influence_ratio_n = atof(val_str);
         } else if (strcmp(key, "max_neighbors") == 0) {
             config->max_neighbors = atoi(val_str);
         } else if (strcmp(key, "wall_layers") == 0) {
@@ -216,7 +220,8 @@ int config_load_params(const char *param_path, SimConfig *config)
     fclose(fp);
 
     /* 影響半径の自動計算 */
-    config->influence_radius = config->influence_ratio * config->particle_distance;
+    config->influence_radius_lap = config->influence_ratio_lap * config->particle_distance;
+    config->influence_radius_n = config->influence_ratio_n * config->particle_distance;
 
     return 0;
 }
@@ -225,8 +230,10 @@ void config_print(const SimConfig *config)
 {
     printf("=== Simulation Configuration ===\n");
     printf("particle_distance:    %.6f m\n", config->particle_distance);
-    printf("influence_radius:     %.6f m  (ratio = %.2f)\n",
-           config->influence_radius, config->influence_ratio);
+    printf("influence_radius_lap: %.6f m  (ratio = %.2f)  [Laplacian]\n",
+           config->influence_radius_lap, config->influence_ratio_lap);
+    printf("influence_radius_n:   %.6f m  (ratio = %.2f)  [number density]\n",
+           config->influence_radius_n, config->influence_ratio_n);
     printf("max_neighbors:        %d\n", config->max_neighbors);
     printf("wall_layers:          %d\n", config->wall_layers);
     printf("dummy_layers:          %d\n", config->dummy_layers);

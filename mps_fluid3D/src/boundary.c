@@ -16,16 +16,6 @@ void apply_wall_boundary(ParticleSystem *ps)
     }
 }
 
-/* 自由表面の圧力をゼロに設定 */
-void apply_surface_pressure(ParticleSystem *ps)
-{
-    for (int i = 0; i < ps->num; i++) {
-        if (ps->particles[i].on_surface) {
-            ps->particles[i].pressure = 0.0;
-        }
-    }
-}
-
 
 /* 計算領域外の粒子をゴースト粒子に変更 */
 void remove_out_of_bounds(ParticleSystem *ps, double xmin, double xmax,
@@ -45,6 +35,8 @@ void remove_out_of_bounds(ParticleSystem *ps, double xmin, double xmax,
             z < zmin - margin || z > zmax + margin ||
             isnan(x) || isnan(y) || isnan(z)) {
             ps->particles[i].type = GHOST_PARTICLE;
+            ps->particles[i].pressure = 0.0;
+            ps->particles[i].n = 0.0;
             for (int d = 0; d < DIM; d++) {
                 ps->particles[i].vel[d] = 0.0;
                 ps->particles[i].acc[d] = 0.0;
