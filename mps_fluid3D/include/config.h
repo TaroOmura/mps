@@ -8,5 +8,6 @@
 #define FLUID_PARTICLE    0
 #define WALL_PARTICLE     1
 #define GHOST_PARTICLE    2
+#define DUMMY_PARTICLE    3
 
 #endif /* CONFIG_H */

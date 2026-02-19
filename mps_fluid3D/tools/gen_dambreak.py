@@ -29,7 +29,8 @@ def main():
 
     # 粒子設定
     parser.add_argument("--l0", type=float, default=0.025, help="粒子間距離 [m]")
-    parser.add_argument("--wall_layers", type=int, default=3, help="壁粒子の層数")
+    parser.add_argument("--wall_layers", type=int, default=2, help="壁粒子の層数")
+    parser.add_argument("--dummy_layers", type=int, default=2, help="ダミー粒子の層数")
 
     # 物性値
     parser.add_argument("--density", type=float, default=1000.0, help="密度 [kg/m^3]")
@@ -51,6 +52,7 @@ def main():
 
     l0 = args.l0
     wl = args.wall_layers
+    dl = args.dummy_layers
     dx, dy, dz = args.domain_x, args.domain_y, args.domain_z
     wx, wy, wz = args.water_x, args.water_y, args.water_z
 
@@ -58,13 +60,18 @@ def main():
     particles = []
     n_fluid = 0
     n_wall = 0
+    n_dummy = 0
 
-    i_min = -(wl - 1)
-    i_max = int(dx / l0) + (wl - 1)
-    j_min = -(wl - 1)
+    total_layers = wl + dl
+    i_right = int(dx / l0)   # 右壁の基準インデックス
+    k_back  = int(dz / l0)   # 後壁の基準インデックス
+
+    i_min = -(total_layers - 1)
+    i_max = i_right + (total_layers - 1)
+    j_min = -(total_layers - 1)
     j_max = int(dy / l0)
-    k_min = -(wl - 1)
-    k_max = int(dz / l0) + (wl - 1)
+    k_min = -(total_layers - 1)
+    k_max = k_back + (total_layers - 1)
 
     eps = 1.0e-10
 
@@ -75,37 +82,52 @@ def main():
                 y = j * l0
                 z = k * l0
 
-                is_wall = False
+                ptype = None  # None = 対象外（スキップ）
 
-                # 底面
+                # 壁
                 if j <= 0:
-                    is_wall = True
-                # 左壁
-                if i <= 0 and j > 0:
-                    is_wall = True
-                # 右壁
-                if x >= dx - eps and j > 0:
-                    is_wall = True
-                # 前壁
-                if k <= 0 and j > 0:
-                    is_wall = True
-                # 後壁
-                if z >= dz - eps and j > 0:
-                    is_wall = True
+                    ptype = 1
+                if i <= 0:
+                    ptype = 1
+                if i >= i_right:
+                    ptype = 1
+                if k <= 0:
+                    ptype = 1
+                if k >= k_back:
+                    ptype = 1
+                #ダミー（壁から上塗り）
+                if j <= -wl:
+                    ptype = 3
+                if i <= -wl:
+                    ptype = 3
+                if i >= i_right + wl:
+                    ptype = 3
+                if k <= -wl:
+                    ptype = 3
+                if k >= k_back + wl:
+                    ptype = 3
 
-                if is_wall:
-                    particles.append((x, y, z, 0.0, 0.0, 0.0, 1))
+                # 流体粒子（水柱の内部）
+                if ptype is None:
+                    if (i >= 1 and x <= wx + eps and
+                            j >= 1 and y <= wy + eps and
+                            k >= 1 and z <= wz + eps):
+                        ptype = 0
+
+                if ptype is None:
+                    continue
+
+                particles.append((x, y, z, 0.0, 0.0, 0.0, ptype))
+                if ptype == 0:
+                    n_fluid += 1
+                elif ptype == 1:
                     n_wall += 1
                 else:
-                    # 水柱内部
-                    if (x > 0.0 and x < wx - eps and
-                            y > 0.0 and y < wy - eps and
-                            z > 0.0 and z < wz - eps):
-                        particles.append((x, y, z, 0.0, 0.0, 0.0, 0))
-                        n_fluid += 1
+                    n_dummy += 1
 
     n_total = len(particles)
-    print(f"Generated particles: {n_fluid} fluid, {n_wall} wall, {n_total} total")
+    print(f"Generated particles: {n_fluid} fluid, {n_wall} wall, "
+          f"{n_dummy} dummy, {n_total} total")
 
     # ---- particles.txt ----
     particle_path = os.path.join(args.outdir, "particles.txt")
@@ -114,7 +136,7 @@ def main():
         f.write(f"# Domain: {dx} x {dy} x {dz} m\n")
         f.write(f"# Water column: {wx} x {wy} x {wz} m\n")
         f.write(f"# Particle distance: {l0} m\n")
-        f.write(f"# Fluid: {n_fluid}, Wall: {n_wall}, Total: {n_total}\n")
+        f.write(f"# Fluid: {n_fluid}, Wall: {n_wall}, Dummy: {n_dummy}, Total: {n_total}\n")
         f.write(f"{n_total}\n")
         f.write("# x y z vx vy vz type\n")
         for p in particles:
@@ -133,6 +155,7 @@ def main():
         f.write(f"influence_ratio      2.1\n")
         f.write(f"max_neighbors        512\n")
         f.write(f"wall_layers          {wl}\n")
+        f.write(f"dummy_layers         {dl}\n")
         f.write("#\n")
         f.write("# Material\n")
         f.write(f"density              {args.density}\n")

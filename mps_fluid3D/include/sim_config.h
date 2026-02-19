@@ -14,6 +14,7 @@ typedef struct {
     double influence_radius;    /* 影響半径 re [m] (自動計算) */
     int    max_neighbors;       /* 1粒子あたり最大近傍数 */
     int    wall_layers;         /* 壁粒子の層数 */
+    int    dummy_layers;        /* ダミー粒子の層数*/
 
     /* 物性値 */
     double density;             /* 流体密度 [kg/m^3] */
@@ -33,10 +34,6 @@ typedef struct {
 
     /* 自由表面判定 */
     double surface_threshold;   /* n/n0 がこの値未満なら自由表面 */
-
-    /* 壁貫通防止パラメータ */
-    double wall_repulsion_coeff; /* 壁面反発力係数 */
-    double wall_restitution;     /* 壁面反発時の反発係数 */
 
     /* 計算領域 */
     double domain_min[DIM];     /* 領域の最小座標 */

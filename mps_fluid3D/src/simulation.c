@@ -47,23 +47,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
             ps->particles[i].pos[d] += dt * ps->particles[i].vel[d];
         }
     }
-
-    /* 壁粒子の固定 */
-    apply_wall_boundary(ps);
-
-    /* 壁面位置クランプ (陽的ステップ後) */
-    clamp_to_walls(ps);
-
     /* === 陰的ステップ === */
 
     /* 近傍探索の更新 (仮位置にて) */
     neighbor_search_brute_force(nl, ps, re);
-
-    /* 壁面反発力 */
-    apply_wall_repulsion(ps, nl);
-
-    /* 粒子間衝突処理 */
-    handle_collision(ps, nl);
 
     /* 粒子数密度の計算 */
     calc_particle_number_density(ps, nl);
@@ -73,9 +60,6 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
 
     /* 圧力ポアソン方程式の求解 */
     solve_pressure(ps, nl);
-
-    /* 負圧のクランプ */
-    clamp_negative_pressure(ps);
 
     /* 圧力勾配による速度・位置の修正 */
     calc_pressure_gradient(ps, nl);
@@ -91,9 +75,6 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
 
     /* 壁粒子の再固定 */
     apply_wall_boundary(ps);
-
-    /* 壁面位置クランプ (陰的ステップ後) */
-    clamp_to_walls(ps);
 
     /* 領域外粒子の処理 */
     remove_out_of_bounds(ps,

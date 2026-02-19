@@ -174,8 +174,6 @@ python3 vis/visualize.py \
 | パラメータ | デフォルト値 | 説明 |
 |---|---|---|
 | `surface_threshold` | 0.97 | 自由表面の判定閾値 (n/n0) |
-| `wall_repulsion_coeff` | (自動計算) | 壁面反発力係数 |
-| `wall_restitution` | 0.2 | 壁面反発時の反発係数 |
 
 ### 計算領域
 
@@ -206,7 +204,7 @@ python3 vis/visualize.py \
 ...
 ```
 
-`type`: 0 = 流体粒子, 1 = 壁粒子
+`type`: 0 = 流体粒子, 1 = 壁粒子, 2 = ダミー粒子
 
 ## ライセンス
 

@@ -25,7 +25,8 @@ void config_set_defaults(SimConfig *config)
     config->influence_ratio   = 2.1;
     config->influence_radius  = 2.1 * 0.025;
     config->max_neighbors     = 512;
-    config->wall_layers       = 3;
+    config->wall_layers       = 2;
+    config->dummy_layers      = 2;
 
     config->density   = 1000.0;
     config->viscosity = 1.0e-6;
@@ -43,9 +44,6 @@ void config_set_defaults(SimConfig *config)
     config->relaxation_coeff = 0.2;
 
     config->surface_threshold = 0.97;
-
-    config->wall_repulsion_coeff = 196.2;
-    config->wall_restitution     = 0.2;
 
     config->domain_min[0] = 0.0;
     config->domain_min[1] = 0.0;
@@ -168,6 +166,8 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->max_neighbors = atoi(val_str);
         } else if (strcmp(key, "wall_layers") == 0) {
             config->wall_layers = atoi(val_str);
+        } else if (strcmp(key, "dummy_layers") == 0) {
+            config->dummy_layers = atoi(val_str);
         } else if (strcmp(key, "density") == 0) {
             config->density = atof(val_str);
         } else if (strcmp(key, "viscosity") == 0) {
@@ -194,10 +194,6 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->relaxation_coeff = atof(val_str);
         } else if (strcmp(key, "surface_threshold") == 0) {
             config->surface_threshold = atof(val_str);
-        } else if (strcmp(key, "wall_repulsion_coeff") == 0) {
-            config->wall_repulsion_coeff = atof(val_str);
-        } else if (strcmp(key, "wall_restitution") == 0) {
-            config->wall_restitution = atof(val_str);
         } else if (strcmp(key, "domain_x_min") == 0) {
             config->domain_min[0] = atof(val_str);
         } else if (strcmp(key, "domain_x_max") == 0) {
@@ -233,6 +229,7 @@ void config_print(const SimConfig *config)
            config->influence_radius, config->influence_ratio);
     printf("max_neighbors:        %d\n", config->max_neighbors);
     printf("wall_layers:          %d\n", config->wall_layers);
+    printf("dummy_layers:          %d\n", config->dummy_layers);
     printf("density:              %.1f kg/m^3\n", config->density);
     printf("viscosity:            %.2e m^2/s\n", config->viscosity);
     printf("gravity:              (%.4f, %.4f, %.4f) m/s^2\n",
@@ -245,8 +242,6 @@ void config_print(const SimConfig *config)
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);
     printf("surface_threshold:    %.4f\n", config->surface_threshold);
-    printf("wall_repulsion_coeff: %.4f\n", config->wall_repulsion_coeff);
-    printf("wall_restitution:     %.4f\n", config->wall_restitution);
     printf("domain:               [%.3f, %.3f] x [%.3f, %.3f] x [%.3f, %.3f]\n",
            config->domain_min[0], config->domain_max[0],
            config->domain_min[1], config->domain_max[1],

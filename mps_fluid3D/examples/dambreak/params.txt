@@ -4,7 +4,8 @@
 particle_distance    0.025
 influence_ratio      2.1
 max_neighbors        512
-wall_layers          3
+wall_layers          2
+dummy_layers         2
 #
 # Material
 density              1000.0
