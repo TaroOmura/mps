@@ -327,7 +327,11 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
         M[ei * n_eq + ei] = coeff * sum_w;
 
         /* 右辺 */
-        c[ei] = (g_config->density / dt2) * (ps->particles[i].n - n0) / n0;
+        if (ps->particles[i].type == WALL_PARTICLE) {
+            c[ei] = 0.0;  /* 壁粒子: 固定境界なので源泉項なし */
+        } else {
+            c[ei] = (g_config->density / dt2) * (ps->particles[i].n - n0) / n0;
+        }
 
         /* 緩和係数を適用 */
         c[ei] *= g_config->relaxation_coeff;

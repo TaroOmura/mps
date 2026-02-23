@@ -68,8 +68,10 @@ void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
 
 /*
  * 圧力勾配（勾配モデル）
- *   <∇P>_i = (d / n0) * Σ_{j≠i} [(P_j - P_i) / |r_j - r_i|^2]
+ *   <∇P>_i = (d / n0) * Σ_{j≠i} [(P_j - P_min) / |r_j - r_i|^2]
  *            * (r_j - r_i) * w(|r_j - r_i|, re)
+ *
+ * P_min: 粒子i及びその近傍の最小圧力（引張不安定性対策）
  *
  * 補正加速度 = -(1/ρ) * <∇P> をaccに格納
  */
@@ -81,6 +83,14 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
 
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        /* 近傍粒子（自分を含む）の最小圧力を求める（引張不安定性対策） */
+        double p_min = ps->particles[i].pressure;
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].pressure < p_min)
+                p_min = ps->particles[j].pressure;
+        }
 
         double grad[DIM];
         for (int d = 0; d < DIM; d++) grad[d] = 0.0;
@@ -97,7 +107,7 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
 
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
-            double dp = ps->particles[j].pressure - ps->particles[i].pressure;
+            double dp = ps->particles[j].pressure - p_min;
 
             for (int d = 0; d < DIM; d++) {
                 grad[d] += dp / r2 * dr[d] * w;

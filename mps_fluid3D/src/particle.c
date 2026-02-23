@@ -55,21 +55,28 @@ int particle_system_add(ParticleSystem *ps, double pos[], double vel[], int type
 /*
  * 初期粒子配置から基準粒子数密度 n0 とラプラシアンモデル用パラメータ λ を計算
  *
- *   n0 = max_i { Σ_{j≠i} w(|r_j - r_i|, re) }
- *   λ  = Σ_{j≠i} |r_j - r_i|^2 * w(|r_j - r_i|, re) / n0
+ * n0     : calc_particle_number_density と同じ influence_radius_n で計算
+ * lambda : ラプラシアンモデルの固有値補正係数。influence_radius_lap で計算
+ *
+ * 両者に異なる半径を使う場合、n0 と n_i は必ず同じ半径で計算しなければ
+ * 自由表面判定および PPE 右辺 (n_i - n0)/n0 が破綻する。
  */
 void particle_system_calc_initial_params(ParticleSystem *ps)
 {
-    double re = g_config->influence_radius_lap;
-    double max_n0 = 0.0;
+    double re_n   = g_config->influence_radius_n;
+    double re_lap = g_config->influence_radius_lap;
+
+    double max_n0        = 0.0;
     double max_lambda_num = 0.0;
+    double max_lambda_den = 0.0;
 
     int found = 0;
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
 
-        double n0_i = 0.0;
+        double n0_i        = 0.0;
         double lambda_num_i = 0.0;
+        double lambda_den_i = 0.0;
 
         for (int j = 0; j < ps->num; j++) {
             if (j == i) continue;
@@ -79,16 +86,24 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
                 r2 += diff * diff;
             }
             double r = sqrt(r2);
-            double w = kernel_weight(r, re);
-            if (w > 0.0) {
-                n0_i += w;
-                lambda_num_i += r2 * w;
+
+            /* n0: influence_radius_n で計算 (calc_particle_number_density と同じ) */
+            double wn = kernel_weight(r, re_n);
+            if (wn > 0.0)
+                n0_i += wn;
+
+            /* lambda: influence_radius_lap で計算 */
+            double wl = kernel_weight(r, re_lap);
+            if (wl > 0.0) {
+                lambda_num_i += r2 * wl;
+                lambda_den_i += wl;
             }
         }
 
         if (n0_i > max_n0) {
-            max_n0 = n0_i;
+            max_n0        = n0_i;
             max_lambda_num = lambda_num_i;
+            max_lambda_den = lambda_den_i;
             found = 1;
         }
     }
@@ -100,8 +115,9 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         return;
     }
 
-    ps->n0 = max_n0;
-    ps->lambda = (max_n0 > 1.0e-10) ? max_lambda_num / max_n0 : 1.0;
+    ps->n0     = max_n0;
+    ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
 
-    printf("Initial params: n0 = %.6f, lambda = %.6f\n", ps->n0, ps->lambda);
+    printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)\n",
+           ps->n0, re_n, ps->lambda, re_lap);
 }

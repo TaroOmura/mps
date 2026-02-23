@@ -16,19 +16,20 @@ import os
 
 def main():
     parser = argparse.ArgumentParser(description="ダムブレイク問題の初期条件生成")
+    L = 0.146
 
     # 領域設定
-    parser.add_argument("--domain_x", type=float, default=0.4, help="領域x幅 [m]")
-    parser.add_argument("--domain_y", type=float, default=0.3, help="領域y高さ [m]")
-    parser.add_argument("--domain_z", type=float, default=0.2, help="領域z奥行 [m]")
+    parser.add_argument("--domain_x", type=float, default=L*4, help="領域x幅 [m]")
+    parser.add_argument("--domain_y", type=float, default=L*2, help="領域y高さ [m]")
+    parser.add_argument("--domain_z", type=float, default=0.024, help="領域z奥行 [m]")
 
     # 水柱設定
-    parser.add_argument("--water_x", type=float, default=0.10, help="水柱x幅 [m]")
-    parser.add_argument("--water_y", type=float, default=0.20, help="水柱y高さ [m]")
-    parser.add_argument("--water_z", type=float, default=0.20, help="水柱z奥行 [m]")
+    parser.add_argument("--water_x", type=float, default=L, help="水柱x幅 [m]")
+    parser.add_argument("--water_y", type=float, default=L*2, help="水柱y高さ [m]")
+    parser.add_argument("--water_z", type=float, default=0.024, help="水柱z奥行 [m]")
 
     # 粒子設定
-    parser.add_argument("--l0", type=float, default=0.025, help="粒子間距離 [m]")
+    parser.add_argument("--l0", type=float, default=0.008, help="粒子間距離 [m]")
     parser.add_argument("--wall_layers", type=int, default=2, help="壁粒子の層数")
     parser.add_argument("--dummy_layers", type=int, default=2, help="ダミー粒子の層数")
 
@@ -41,6 +42,9 @@ def main():
     parser.add_argument("--dt", type=float, default=5.0e-4, help="時間刻み [s]")
     parser.add_argument("--t_end", type=float, default=2.0, help="終了時刻 [s]")
     parser.add_argument("--output_interval", type=int, default=100, help="出力間隔 [ステップ]")
+
+    # ソルバー設定
+    parser.add_argument("--solver_type", type=int, default=1, help="圧力ソルバー種別 (0=CG, 1=ICCG)")
 
     # 出力先
     parser.add_argument("--outdir", type=str, default="examples/dambreak", help="ファイル出力先ディレクトリ")
@@ -145,7 +149,6 @@ def main():
     print(f"  -> {particle_path}")
 
     # ---- params.txt ----
-    wall_repulsion = abs(args.gravity_y) / (2.0 * l0)
     param_path = os.path.join(args.outdir, "params.txt")
     with open(param_path, "w") as f:
         f.write("# MPS 3D Simulation Parameters\n")
@@ -171,6 +174,7 @@ def main():
         f.write(f"output_interval      {args.output_interval}\n")
         f.write("#\n")
         f.write("# Pressure solver\n")
+        f.write(f"solver_type          {args.solver_type}\n")
         f.write(f"cg_max_iter          10000\n")
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")
@@ -178,9 +182,6 @@ def main():
         f.write("# Free surface\n")
         f.write(f"surface_threshold    0.97\n")
         f.write("#\n")
-        f.write("# Wall\n")
-        f.write(f"wall_repulsion_coeff {wall_repulsion:.1f}\n")
-        f.write(f"wall_restitution     0.2\n")
         f.write("#\n")
         f.write("# Domain\n")
         f.write(f"domain_x_min         0.0\n")
