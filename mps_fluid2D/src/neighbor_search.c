@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -41,9 +42,12 @@ void neighbor_search_brute_force(NeighborList *nl, ParticleSystem *ps, double re
     memset(nl->count, 0, n * sizeof(int));
 
     for (int i = 0; i < n; i++) {
+        if (ps->particles[i].type == GHOST_PARTICLE) continue;
+
         int cnt = 0;
         for (int j = 0; j < n; j++) {
             if (i == j) continue;
+            if (ps->particles[j].type == GHOST_PARTICLE) continue;
 
             double r2 = 0.0;
             for (int d = 0; d < DIM; d++) {
@@ -52,10 +56,14 @@ void neighbor_search_brute_force(NeighborList *nl, ParticleSystem *ps, double re
             }
 
             if (r2 < re * re) {
-                if (cnt < nl->max_neighbors) {
-                    nl->neighbors[i * nl->max_neighbors + cnt] = j;
-                    cnt++;
+                if (cnt >= nl->max_neighbors) {
+                    fprintf(stderr,
+                            "Error: max_neighbors (%d) exceeded for particle %d\n",
+                            nl->max_neighbors, i);
+                    exit(EXIT_FAILURE);
                 }
+                nl->neighbors[i * nl->max_neighbors + cnt] = j;
+                cnt++;
             }
         }
         nl->count[i] = cnt;

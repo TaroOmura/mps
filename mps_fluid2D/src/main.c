@@ -1,104 +1,127 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <string.h>
+#include <sys/stat.h>
 #include "config.h"
+#include "sim_config.h"
 #include "particle.h"
 #include "simulation.h"
 
 /*
- * ダムブレイク問題の初期粒子配置
+ * 粒子初期条件ファイルの読み込み
  *
- *     0.0     WATER_X              DOMAIN_X_MAX
- * 0.6  +---+---------------------------+
- *      | W |                           |
- * 0.5  | A |   (air)                   |
- *      | T |                           |
- *      | E |                           |
- *      | R |                           |
- *      +---+                           |
- *      |                               |
- * 0.0  +-------------------------------+
- *
- * 壁粒子: 底面・左壁・右壁に WALL_LAYERS 層
- * 流体粒子: 水柱内部
+ * 書式:
+ *   # コメント行
+ *   粒子数
+ *   x y vx vy type
+ *   x y vx vy type
+ *   ...
  */
-static void setup_dam_break(ParticleSystem *ps)
+static int load_particles(const char *filepath, ParticleSystem *ps)
 {
-    double l0 = PARTICLE_DISTANCE;
-    double vel[DIM] = {0.0, 0.0};
-    int n_fluid = 0, n_wall = 0;
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) {
+        fprintf(stderr, "Error: cannot open particle file '%s'\n", filepath);
+        return -1;
+    }
 
-    /*
-     * 全粒子を格子点 (i*l0, j*l0) に配置
-     * i, j の範囲は壁の外側層も含む
-     */
-    int i_min = -(WALL_LAYERS - 1);
-    int i_max = (int)(DOMAIN_X_MAX / l0) + (WALL_LAYERS - 1);
-    int j_min = -(WALL_LAYERS - 1);
-    int j_max = (int)(DOMAIN_Y_MAX / l0);
+    char line[512];
+    int n_particles = 0;
+    int header_read = 0;
 
-    for (int i = i_min; i <= i_max; i++) {
-        for (int j = j_min; j <= j_max; j++) {
-            double x = i * l0;
-            double y = j * l0;
-            double pos[DIM] = {x, y};
+    /* 粒子数の読み取り (コメント行をスキップ) */
+    while (fgets(line, sizeof(line), fp)) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
 
-            /* 壁領域の判定: 底面(y<=0), 左壁(x<=0), 右壁(x>=DOMAIN_X_MAX) */
-            int is_wall = 0;
-
-            /* 底面の壁 */
-            if (j <= 0) {
-                is_wall = 1;
-            }
-            /* 左壁 */
-            if (i <= 0 && j > 0) {
-                is_wall = 1;
-            }
-            /* 右壁 */
-            if (x >= DOMAIN_X_MAX - 1.0e-10 && j > 0) {
-                is_wall = 1;
-            }
-
-            if (is_wall) {
-                particle_system_add(ps, pos, vel, WALL_PARTICLE);
-                n_wall++;
-            } else {
-                /* 流体領域: 水柱内部 */
-                if (x > 0.0 && x < WATER_X - 1.0e-10 &&
-                    y > 0.0 && y < WATER_Y - 1.0e-10) {
-                    particle_system_add(ps, pos, vel, FLUID_PARTICLE);
-                    n_fluid++;
-                }
-                /* それ以外（空気領域）は粒子を配置しない */
-            }
+        if (sscanf(p, "%d", &n_particles) == 1) {
+            header_read = 1;
+            break;
         }
     }
 
-    printf("Dam break setup: %d fluid, %d wall, %d total\n",
+    if (!header_read || n_particles <= 0) {
+        fprintf(stderr, "Error: invalid particle count in '%s'\n", filepath);
+        fclose(fp);
+        return -1;
+    }
+
+    int n_fluid = 0, n_wall = 0;
+    int loaded = 0;
+
+    while (fgets(line, sizeof(line), fp) && loaded < n_particles) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
+
+        double x, y, vx, vy;
+        int type;
+        if (sscanf(p, "%lf %lf %lf %lf %d", &x, &y, &vx, &vy, &type) != 5) {
+            fprintf(stderr, "Warning: skipping malformed line: %s", line);
+            continue;
+        }
+
+        double pos[DIM] = {x, y};
+        double vel[DIM] = {vx, vy};
+        particle_system_add(ps, pos, vel, type);
+        loaded++;
+
+        if (type == FLUID_PARTICLE) n_fluid++;
+        else if (type == WALL_PARTICLE) n_wall++;
+    }
+
+    fclose(fp);
+
+    if (loaded != n_particles) {
+        fprintf(stderr, "Warning: expected %d particles but loaded %d\n",
+                n_particles, loaded);
+    }
+
+    printf("Loaded particles: %d fluid, %d wall, %d total\n",
            n_fluid, n_wall, ps->num);
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <cal_file>\n", argv[0]);
+        fprintf(stderr, "  cal_file: calculation file (e.g., examples/dambreak/cal.txt)\n");
+        return 1;
+    }
 
-    printf("=== MPS Fluid Simulation ===\n");
-    printf("Particle distance: %.4f m\n", PARTICLE_DISTANCE);
-    printf("Influence radius:  %.4f m\n", INFLUENCE_RADIUS);
-    printf("Time step:         %.2e s\n", DT);
-    printf("End time:          %.2f s\n", T_END);
-    printf("\n");
+    const char *cal_path = argv[1];
+
+    /* 設定の初期化・読み込み */
+    SimConfig config;
+    config_set_defaults(&config);
+
+    if (config_load_cal(cal_path, &config) != 0) return 1;
+    if (config_load_params(config.param_file, &config) != 0) return 1;
+
+    /* グローバルポインタの設定 */
+    g_config = &config;
+
+    printf("=== MPS 2D Fluid Simulation ===\n\n");
+    config_print(&config);
+
+    /* 出力ディレクトリの作成 */
+    mkdir(config.output_dir, 0755);
 
     /* 粒子システムの生成 */
-    ParticleSystem *ps = particle_system_create(MAX_PARTICLES);
+    int capacity = 100000;
+    ParticleSystem *ps = particle_system_create(capacity);
     if (!ps) {
         fprintf(stderr, "Error: failed to create particle system\n");
         return 1;
     }
 
-    /* ダムブレイク問題の初期配置 */
-    setup_dam_break(ps);
+    /* 粒子初期条件の読み込み */
+    if (load_particles(config.particle_file, ps) != 0) {
+        particle_system_free(ps);
+        return 1;
+    }
 
     /* 基準粒子数密度 n0 とラプラシアン用パラメータ λ の計算 */
     particle_system_calc_initial_params(ps);

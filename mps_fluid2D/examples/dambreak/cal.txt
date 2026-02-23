@@ -1,0 +1,3 @@
+# MPS 2D Calculation Control File
+particle_file  particles.txt
+param_file     params.txt

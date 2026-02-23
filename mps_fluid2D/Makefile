@@ -26,4 +26,4 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN)
 
 run: $(BIN)
-	./$(BIN)
+	./$(BIN) examples/dambreak/cal.txt

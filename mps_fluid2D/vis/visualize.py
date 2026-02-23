@@ -18,10 +18,11 @@ def load_csv(filepath):
 
 def main():
     parser = argparse.ArgumentParser(description="MPS結果の可視化")
-    parser.add_argument("--input_dir", default="../output", help="CSVファイルのディレクトリ")
+    parser.add_argument("--input_dir", default="output", help="CSVファイルのディレクトリ")
     parser.add_argument("--save", default=None, help="アニメーションを保存するファイルパス (.mp4 or .gif)")
     parser.add_argument("--interval", type=int, default=50, help="フレーム間隔 [ms]")
     parser.add_argument("--dt", type=float, default=5.0e-4, help="シミュレーションの時間刻み [s]")
+    parser.add_argument("--fluid_only", action="store_true", help="流体粒子のみを表示する")
     args = parser.parse_args()
 
     csv_files = sorted(glob.glob(os.path.join(args.input_dir, "*.csv")))
@@ -53,10 +54,14 @@ def main():
     pressure = data0[:, 4]
     ptype = data0[:, 5].astype(int)
 
-    wall_mask = ptype != 0
     fluid_mask = ptype == 0
 
-    wall_scat = ax.scatter(x[wall_mask], y[wall_mask], c="gray", s=2, label="Wall")
+    if args.fluid_only:
+        wall_scat = None
+    else:
+        wall_mask = ptype != 0
+        wall_scat = ax.scatter(x[wall_mask], y[wall_mask], c="gray", s=2, label="Wall")
+
     fluid_scat = ax.scatter(x[fluid_mask], y[fluid_mask], c=pressure[fluid_mask],
                             cmap="jet", s=5, vmin=vmin, vmax=vmax, label="Fluid")
     plt.colorbar(fluid_scat, ax=ax, label="Pressure [Pa]")
@@ -76,15 +81,25 @@ def main():
         pressure = data[:, 4]
         ptype = data[:, 5].astype(int)
 
-        wall_mask = ptype != 0
         fluid_mask = ptype == 0
 
-        wall_scat.set_offsets(np.column_stack([x[wall_mask], y[wall_mask]]))
-        fluid_scat.set_offsets(np.column_stack([x[fluid_mask], y[fluid_mask]]))
-        fluid_scat.set_array(pressure[fluid_mask])
+        if wall_scat is not None:
+            wall_mask = ptype != 0
+            if wall_mask.any():
+                wall_scat.set_offsets(np.column_stack([x[wall_mask], y[wall_mask]]))
+
+        if fluid_mask.any():
+            fluid_scat.set_offsets(np.column_stack([x[fluid_mask], y[fluid_mask]]))
+            fluid_scat.set_array(pressure[fluid_mask])
+        else:
+            fluid_scat.set_offsets(np.empty((0, 2)))
+            fluid_scat.set_array(np.array([]))
         time = step * args.dt
         title.set_text(f"MPS Simulation - Step {step}  (t = {time:.4f} s)")
-        return wall_scat, fluid_scat, title
+
+        if wall_scat is not None:
+            return wall_scat, fluid_scat, title
+        return fluid_scat, title
 
     anim = FuncAnimation(fig, update, frames=len(frames),
                          interval=args.interval, blit=True)
