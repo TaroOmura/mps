@@ -46,10 +46,15 @@ void config_set_defaults(SimConfig *config)
 
     config->surface_threshold = 0.97;
 
+    config->restitution_coeff        = 0.2;
+    config->collision_distance_ratio = 0.5;
+
     config->domain_min[0] = 0.0;
     config->domain_min[1] = 0.0;
     config->domain_max[0] = 1.0;
     config->domain_max[1] = 0.6;
+
+    config->use_analytical_lambda = 0;
 
     strncpy(config->output_dir, "output", sizeof(config->output_dir) - 1);
     config->particle_file[0] = '\0';
@@ -182,6 +187,10 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->relaxation_coeff = atof(val_str);
         } else if (strcmp(key, "surface_threshold") == 0) {
             config->surface_threshold = atof(val_str);
+        } else if (strcmp(key, "restitution_coeff") == 0) {
+            config->restitution_coeff = atof(val_str);
+        } else if (strcmp(key, "collision_distance_ratio") == 0) {
+            config->collision_distance_ratio = atof(val_str);
         } else if (strcmp(key, "domain_x_min") == 0) {
             config->domain_min[0] = atof(val_str);
         } else if (strcmp(key, "domain_x_max") == 0) {
@@ -190,6 +199,8 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->domain_min[1] = atof(val_str);
         } else if (strcmp(key, "domain_y_max") == 0) {
             config->domain_max[1] = atof(val_str);
+        } else if (strcmp(key, "use_analytical_lambda") == 0) {
+            config->use_analytical_lambda = atoi(val_str);
         } else if (strcmp(key, "output_dir") == 0) {
             strncpy(config->output_dir, val_str, sizeof(config->output_dir) - 1);
         } else {
@@ -229,9 +240,16 @@ void config_print(const SimConfig *config)
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);
     printf("surface_threshold:    %.4f\n", config->surface_threshold);
+    printf("restitution_coeff:         %.4f\n", config->restitution_coeff);
+    printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",
+           config->collision_distance_ratio,
+           config->collision_distance_ratio * config->particle_distance);
     printf("domain:               [%.3f, %.3f] x [%.3f, %.3f]\n",
            config->domain_min[0], config->domain_max[0],
            config->domain_min[1], config->domain_max[1]);
+    printf("use_analytical_lambda: %d  (%s)\n",
+           config->use_analytical_lambda,
+           config->use_analytical_lambda ? "analytical" : "from initial particles");
     printf("output_dir:           %s\n", config->output_dir);
     printf("particle_file:        %s\n", config->particle_file);
     printf("param_file:           %s\n", config->param_file);

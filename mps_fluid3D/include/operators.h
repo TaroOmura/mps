@@ -16,4 +16,7 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl);
 /* 自由表面判定 */
 void judge_free_surface(ParticleSystem *ps, double threshold);
 
+/* 粒子間衝突モデル（越塚 2003）: 陽的ステップ後、近傍探索前に呼ぶ */
+void collision(ParticleSystem *ps);
+
 #endif /* OPERATORS_H */

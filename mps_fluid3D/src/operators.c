@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdlib.h>
 #include "operators.h"
 #include "kernel.h"
 #include "sim_config.h"
@@ -103,7 +104,8 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
                 dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
                 r2 += dr[d] * dr[d];
             }
-            if (r2 < 1.0e-20) continue;
+            double l0 = g_config->particle_distance;
+            if (r2 < l0 * l0 * 1.0e-12) continue;
 
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
@@ -134,4 +136,86 @@ void judge_free_surface(ParticleSystem *ps, double threshold)
             ps->particles[i].on_surface = 0;
         }
     }
+}
+
+/*
+ * 粒子間衝突モデル（越塚 2003 に基づく）
+ *
+ * 粒子間距離が collision_dist = collision_distance_ratio * l0 を下回り、かつ接近中
+ * （相対速度の法線成分 > 0）の場合に衝突インパルスを適用する。
+ *
+ * mi = mj（同一密度）のとき、インパルス式は密度がキャンセルされ
+ *   Δv_i = -(1+e)/2 * v_rel_n * n_ij
+ * となる（n_ij: i→j の単位ベクトル）。
+ *
+ * 呼び出しタイミング: 陽的ステップ（仮位置更新）直後、近傍探索前。
+ */
+void collision(ParticleSystem *ps)
+{
+    double l0        = g_config->particle_distance;
+    double col_dist  = g_config->collision_distance_ratio * l0;
+    double col_dist2 = col_dist * col_dist;
+    double e         = g_config->restitution_coeff;
+    double dt        = g_config->dt;
+
+    /* 衝突後速度の一時バッファ（元の速度で初期化） */
+    double (*vel_after)[DIM] = malloc(ps->num * sizeof(*vel_after));
+    if (!vel_after) return;
+
+    for (int i = 0; i < ps->num; i++) {
+        for (int d = 0; d < DIM; d++)
+            vel_after[i][d] = ps->particles[i].vel[d];
+    }
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        /* 粒子 i の現在の（暫定）速度 */
+        double vi[DIM];
+        for (int d = 0; d < DIM; d++)
+            vi[d] = ps->particles[i].vel[d];
+
+        for (int j = 0; j < ps->num; j++) {
+            if (j == i || ps->particles[j].type == GHOST_PARTICLE) continue;
+
+            double dr[DIM];
+            double r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+
+            if (r2 >= col_dist2) continue;
+
+            double r = sqrt(r2);
+            if (r < 1.0e-12 * l0) continue; /* ゼロ除算防止 */
+
+            /* i→j 方向の相対速度成分（正なら接近中） */
+            double rel_v_n = 0.0;
+            for (int d = 0; d < DIM; d++)
+                rel_v_n += (vi[d] - ps->particles[j].vel[d]) * (dr[d] / r);
+
+            if (rel_v_n <= 0.0) continue; /* 離れていれば衝突なし */
+
+            /* 衝突インパルス適用: Δv = -(1+e)/2 * v_rel_n * n_ij */
+            double impulse = (1.0 + e) * 0.5 * rel_v_n;
+            for (int d = 0; d < DIM; d++)
+                vi[d] -= impulse * (dr[d] / r);
+        }
+
+        for (int d = 0; d < DIM; d++)
+            vel_after[i][d] = vi[d];
+    }
+
+    /* 速度・位置の更新 */
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+        for (int d = 0; d < DIM; d++) {
+            double dv = vel_after[i][d] - ps->particles[i].vel[d];
+            ps->particles[i].pos[d] += dt * dv;
+            ps->particles[i].vel[d]  = vel_after[i][d];
+        }
+    }
+
+    free(vel_after);
 }

@@ -37,9 +37,16 @@ typedef struct {
     /* 自由表面判定 */
     double surface_threshold;   /* n/n0 がこの値未満なら自由表面 */
 
+    /* 衝突モデル */
+    double restitution_coeff;        /* 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) */
+    double collision_distance_ratio; /* 衝突判定距離の係数 (col_dist = ratio * l0) */
+
     /* 計算領域 */
     double domain_min[DIM];     /* 領域の最小座標 */
     double domain_max[DIM];     /* 領域の最大座標 */
+
+    /* λ計算方法 */
+    int    use_analytical_lambda; /* λを解析解で計算 (0: 初期粒子配置から計算, 1: 解析解) */
 
     /* 出力設定 */
     char   output_dir[256];     /* 出力ディレクトリ */

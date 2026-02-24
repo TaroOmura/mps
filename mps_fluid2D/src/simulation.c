@@ -60,6 +60,9 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
         }
     }
 
+    /* 粒子間衝突処理（孤立粒子の重なりによる圧力爆発を防ぐ） */
+    collision(ps);
+
     /* === 陰的ステップ === */
 
     /* 近傍探索の更新 (仮位置にて) */

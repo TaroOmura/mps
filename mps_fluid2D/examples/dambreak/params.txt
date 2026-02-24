@@ -5,8 +5,8 @@ particle_distance    0.008
 influence_ratio_lap  4.0
 influence_ratio_n    2.1
 max_neighbors        512
-wall_layers          2
-dummy_layers         2
+wall_layers          4
+dummy_layers         4
 #
 # Material
 density              1000.0
@@ -16,17 +16,22 @@ gravity_y            -9.81
 #
 # Time
 dt                   0.0005
-t_end                0.75
+t_end                0.2
 output_interval      1
 #
 # Pressure solver
 solver_type          1
+use_analytical_lambda 0
 cg_max_iter          10000
 cg_tolerance         1.0e-8
 relaxation_coeff     0.2
 #
 # Free surface
 surface_threshold    0.97
+#
+# Collision model
+restitution_coeff        0.2
+collision_distance_ratio 0.5
 #
 # Domain
 domain_x_min         0.0

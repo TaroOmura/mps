@@ -115,9 +115,15 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         return;
     }
 
-    ps->n0     = max_n0;
-    ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
+    ps->n0 = max_n0;
+    if (g_config->use_analytical_lambda) {
+        ps->lambda = re_lap * re_lap * (double)DIM * (double)(DIM - 1)
+                     / ((double)(DIM + 1) * (double)(DIM + 2));
+    } else {
+        ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
+    }
 
-    printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)\n",
-           ps->n0, re_n, ps->lambda, re_lap);
+    printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)%s\n",
+           ps->n0, re_n, ps->lambda, re_lap,
+           g_config->use_analytical_lambda ? "  [analytical]" : "");
 }

@@ -28,8 +28,8 @@ def main():
 
     # 粒子設定
     parser.add_argument("--l0", type=float, default=0.008, help="粒子間距離 [m]")
-    parser.add_argument("--wall_layers", type=int, default=2, help="壁粒子の層数")
-    parser.add_argument("--dummy_layers", type=int, default=2, help="ダミー粒子の層数")
+    parser.add_argument("--wall_layers", type=int, default=4, help="壁粒子の層数")
+    parser.add_argument("--dummy_layers", type=int, default=4, help="ダミー粒子の層数")
 
     # 物性値
     parser.add_argument("--density", type=float, default=1000.0, help="密度 [kg/m^3]")
@@ -44,6 +44,16 @@ def main():
     # ソルバー設定
     parser.add_argument("--solver_type", type=int, default=1,
                         help="ソルバー種別 (0: CG, 1: ICCG)")
+
+    # 衝突モデル
+    parser.add_argument("--restitution_coeff", type=float, default=0.2,
+                        help="粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性)")
+    parser.add_argument("--collision_distance_ratio", type=float, default=0.5,
+                        help="衝突判定距離の係数 (col_dist = ratio * l0)")
+
+    # λ計算方法
+    parser.add_argument("--use_analytical_lambda", type=int, default=0,
+                        help="1: λを解析解で計算, 0: 初期粒子配置から計算 (default: 0)")
 
     # 出力先
     parser.add_argument("--outdir", type=str, default="examples/dambreak",
@@ -142,7 +152,7 @@ def main():
         f.write("#\n")
         f.write("# Particle\n")
         f.write(f"particle_distance    {l0}\n")
-        f.write(f"influence_ratio_lap  2.1\n")
+        f.write(f"influence_ratio_lap  4.0\n")
         f.write(f"influence_ratio_n    2.1\n")
         f.write(f"max_neighbors        512\n")
         f.write(f"wall_layers          {wl}\n")
@@ -161,12 +171,17 @@ def main():
         f.write("#\n")
         f.write("# Pressure solver\n")
         f.write(f"solver_type          {args.solver_type}\n")
+        f.write(f"use_analytical_lambda {args.use_analytical_lambda}\n")
         f.write(f"cg_max_iter          10000\n")
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")
         f.write("#\n")
         f.write("# Free surface\n")
         f.write(f"surface_threshold    0.97\n")
+        f.write("#\n")
+        f.write("# Collision model\n")
+        f.write(f"restitution_coeff        {args.restitution_coeff}\n")
+        f.write(f"collision_distance_ratio {args.collision_distance_ratio}\n")
         f.write("#\n")
         f.write("# Domain\n")
         f.write(f"domain_x_min         0.0\n")

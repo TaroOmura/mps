@@ -29,6 +29,9 @@ relaxation_coeff     0.2
 # Free surface
 surface_threshold    0.97
 #
+# Collision model
+restitution_coeff        0.2
+collision_distance_ratio 0.5
 #
 # Domain
 domain_x_min         0.0
