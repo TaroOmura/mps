@@ -181,6 +181,7 @@ python3 vis/visualize.py \
 | `cg_max_iter` | 10000 | 最大反復回数 |
 | `cg_tolerance` | 1.0e-8 | 収束判定閾値 |
 | `relaxation_coeff` | 0.2 | 圧力の緩和係数 |
+| `clamp_negative_pressure` | 0 | 負圧クランプ (0: 無効, 1: 有効) — PPE求解後に流体粒子の P < 0 を 0 に置換する。引張不安定性の抑制に有効。 |
 
 ### 自由表面・壁境界
 

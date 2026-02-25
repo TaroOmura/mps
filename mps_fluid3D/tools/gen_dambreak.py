@@ -45,6 +45,8 @@ def main():
 
     # ソルバー設定
     parser.add_argument("--solver_type", type=int, default=1, help="圧力ソルバー種別 (0=CG, 1=ICCG)")
+    parser.add_argument("--clamp_negative_pressure", type=int, default=1,
+                        help="負圧クランプ (0: 無効, 1: 有効)")
 
     # 衝突モデル
     parser.add_argument("--restitution_coeff", type=float, default=0.2,
@@ -189,6 +191,7 @@ def main():
         f.write(f"cg_max_iter          10000\n")
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")
+        f.write(f"clamp_negative_pressure {args.clamp_negative_pressure}\n")
         f.write("#\n")
         f.write("# Free surface\n")
         f.write(f"surface_threshold    0.97\n")

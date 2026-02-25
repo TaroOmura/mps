@@ -29,10 +29,11 @@ typedef struct {
     int    output_interval;     /* 出力間隔 [ステップ] */
 
     /* 圧力計算 */
-    int    solver_type;         /* 線形ソルバー (0: CG, 1: ICCG) */
-    int    cg_max_iter;         /* CG法の最大反復数 */
-    double cg_tolerance;        /* CG法の収束判定閾値 */
-    double relaxation_coeff;    /* 圧力の緩和係数 */
+    int    solver_type;           /* 線形ソルバー (0: CG, 1: ICCG) */
+    int    cg_max_iter;           /* CG法の最大反復数 */
+    double cg_tolerance;          /* CG法の収束判定閾値 */
+    double relaxation_coeff;      /* 圧力の緩和係数 */
+    int    clamp_negative_pressure; /* 負圧クランプ (0: 無効, 1: 有効) */
 
     /* 自由表面判定 */
     double surface_threshold;   /* n/n0 がこの値未満なら自由表面 */
