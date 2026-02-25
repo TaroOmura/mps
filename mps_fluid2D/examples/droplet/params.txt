@@ -1,0 +1,49 @@
+# MPS 2D Droplet Oscillation Parameters
+#
+# Particle
+particle_distance    0.002
+influence_ratio_lap  4.0
+influence_ratio_n    2.1
+max_neighbors        512
+wall_layers          0
+dummy_layers         0
+#
+# Material
+density              1000.0
+viscosity            1e-06
+gravity_x            0.0
+gravity_y            0.0
+#
+# Time
+dt                   0.0001
+t_end                0.5
+output_interval      50
+#
+# Pressure solver
+solver_type          1
+use_analytical_lambda 0
+cg_max_iter          10000
+cg_tolerance         1.0e-8
+relaxation_coeff     0.2
+clamp_negative_pressure 0
+#
+# Free surface
+surface_threshold    0.97
+#
+# Collision model
+restitution_coeff        0.2
+collision_distance_ratio 0.5
+#
+# Surface tension (requires surface tension implementation)
+surface_tension_enabled  1
+surface_tension_coeff    0.073
+surface_tension_re_ratio 3.2
+#
+# Domain: large enough for free droplet
+domain_x_min         -0.065419
+domain_x_max         0.065419
+domain_y_min         -0.065419
+domain_y_max         0.065419
+#
+# Output
+output_dir           output_droplet

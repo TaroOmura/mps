@@ -21,6 +21,7 @@ typedef struct {
     int       capacity;    /* 配列の確保容量 */
     double    n0;          /* 基準粒子数密度 */
     double    lambda;      /* ラプラシアンモデル用パラメータ */
+    double    C_LL;        /* 表面張力係数 (初期化時に計算・保存) */
 } ParticleSystem;
 
 /* 粒子システムの生成・破棄 */

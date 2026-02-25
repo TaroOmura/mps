@@ -50,6 +50,11 @@ void config_set_defaults(SimConfig *config)
     config->restitution_coeff        = 0.2;
     config->collision_distance_ratio = 0.5;
 
+    config->surface_tension_enabled  = 0;
+    config->surface_tension_coeff    = 0.073;
+    config->surface_tension_re_ratio = 3.2;
+    config->influence_radius_st      = 3.2 * 0.025;
+
     config->domain_min[0] = 0.0;
     config->domain_min[1] = 0.0;
     config->domain_max[0] = 1.0;
@@ -194,6 +199,12 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->restitution_coeff = atof(val_str);
         } else if (strcmp(key, "collision_distance_ratio") == 0) {
             config->collision_distance_ratio = atof(val_str);
+        } else if (strcmp(key, "surface_tension_enabled") == 0) {
+            config->surface_tension_enabled = atoi(val_str);
+        } else if (strcmp(key, "surface_tension_coeff") == 0) {
+            config->surface_tension_coeff = atof(val_str);
+        } else if (strcmp(key, "surface_tension_re_ratio") == 0) {
+            config->surface_tension_re_ratio = atof(val_str);
         } else if (strcmp(key, "domain_x_min") == 0) {
             config->domain_min[0] = atof(val_str);
         } else if (strcmp(key, "domain_x_max") == 0) {
@@ -216,6 +227,7 @@ int config_load_params(const char *param_path, SimConfig *config)
     /* 影響半径の自動計算 */
     config->influence_radius_lap = config->influence_ratio_lap * config->particle_distance;
     config->influence_radius_n   = config->influence_ratio_n   * config->particle_distance;
+    config->influence_radius_st  = config->surface_tension_re_ratio * config->particle_distance;
 
     return 0;
 }
@@ -248,6 +260,12 @@ void config_print(const SimConfig *config)
     printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",
            config->collision_distance_ratio,
            config->collision_distance_ratio * config->particle_distance);
+    printf("surface_tension:      %s\n", config->surface_tension_enabled ? "ON" : "OFF");
+    if (config->surface_tension_enabled) {
+        printf("  surface_tension_coeff:    %.4f N/m\n", config->surface_tension_coeff);
+        printf("  surface_tension_re_ratio: %.2f  (re_st = %.6f m)\n",
+               config->surface_tension_re_ratio, config->influence_radius_st);
+    }
     printf("domain:               [%.3f, %.3f] x [%.3f, %.3f]\n",
            config->domain_min[0], config->domain_max[0],
            config->domain_min[1], config->domain_max[1]);

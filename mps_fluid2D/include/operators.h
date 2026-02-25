@@ -22,4 +22,7 @@ void clamp_pressure(ParticleSystem *ps);
 /* 粒子間衝突モデル（越塚 2003）: 陽的ステップ後、近傍探索前に呼ぶ */
 void collision(ParticleSystem *ps);
 
+/* ポテンシャル型表面張力 (accに加算) */
+void calc_surface_tension(ParticleSystem *ps, NeighborList *nl);
+
 #endif /* OPERATORS_H */

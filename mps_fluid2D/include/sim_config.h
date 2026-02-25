@@ -42,6 +42,12 @@ typedef struct {
     double restitution_coeff;       /* 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) */
     double collision_distance_ratio; /* 衝突判定距離の係数 (col_dist = ratio * l0) */
 
+    /* 表面張力 */
+    int    surface_tension_enabled;   /* 0: 無効, 1: 有効 */
+    double surface_tension_coeff;     /* 表面張力係数 σ [N/m] */
+    double surface_tension_re_ratio;  /* re_st の倍率 (re_st = ratio * l0) */
+    double influence_radius_st;       /* re_st [m] (自動計算) */
+
     /* 計算領域 */
     double domain_min[DIM];      /* 領域の最小座標 */
     double domain_max[DIM];      /* 領域の最大座標 */

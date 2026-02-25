@@ -65,18 +65,22 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
 {
     double re_n   = g_config->influence_radius_n;
     double re_lap = g_config->influence_radius_lap;
+    double re_st  = g_config->influence_radius_st;
+    double l0     = g_config->particle_distance;
 
-    double max_n0        = 0.0;
+    double max_n0         = 0.0;
     double max_lambda_num = 0.0;
     double max_lambda_den = 0.0;
+    double max_phi_sum    = 0.0;
 
     int found = 0;
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
 
-        double n0_i        = 0.0;
+        double n0_i         = 0.0;
         double lambda_num_i = 0.0;
         double lambda_den_i = 0.0;
+        double phi_sum_i    = 0.0;
 
         for (int j = 0; j < ps->num; j++) {
             if (j == i) continue;
@@ -98,12 +102,20 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
                 lambda_num_i += r2 * wl;
                 lambda_den_i += wl;
             }
+
+            /* phi_sum: 表面張力用ポテンシャルの和 */
+            if (r < re_st) {
+                double phi = (1.0/3.0) * (r - 1.5*l0 + 0.5*re_st)
+                                       * (r - re_st) * (r - re_st);
+                phi_sum_i += phi;
+            }
         }
 
         if (n0_i > max_n0) {
-            max_n0        = n0_i;
+            max_n0         = n0_i;
             max_lambda_num = lambda_num_i;
             max_lambda_den = lambda_den_i;
+            max_phi_sum    = phi_sum_i;
             found = 1;
         }
     }
@@ -123,7 +135,16 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
     }
 
+    if (g_config->surface_tension_enabled && max_phi_sum > 1.0e-30) {
+        ps->C_LL = 2.0 * g_config->surface_tension_coeff
+                   * l0 * l0 / max_phi_sum;
+    } else {
+        ps->C_LL = 0.0;
+    }
+
     printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)%s\n",
            ps->n0, re_n, ps->lambda, re_lap,
            g_config->use_analytical_lambda ? "  [analytical]" : "");
+    if (g_config->surface_tension_enabled)
+        printf("  C_LL = %.6e (re_st=%.4f)\n", ps->C_LL, re_st);
 }

@@ -155,6 +155,45 @@ void judge_free_surface(ParticleSystem *ps, double threshold)
 }
 
 /*
+ * ポテンシャル型表面張力（腰塚多項式ポテンシャル）
+ *
+ *   φ(r) = (1/3) * (r - 1.5*l0 + 0.5*re_st) * (r - re_st)^2  (r < re_st)
+ *
+ *   F_i = (C_LL / ρ) * Σ_{j: FLUID} φ(r_ij) * (r_j - r_i) / r_ij
+ *
+ * C_LL は初期配置の最内部粒子の Σφ から計算され ParticleSystem に保存される。
+ */
+void calc_surface_tension(ParticleSystem *ps, NeighborList *nl)
+{
+    double re_st = g_config->influence_radius_st;
+    double l0    = g_config->particle_distance;
+    double coeff = ps->C_LL / g_config->density;
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].type != FLUID_PARTICLE) continue;
+
+            double dr[DIM], r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+            double r = sqrt(r2);
+            if (r < 1.0e-12 * l0 || r >= re_st) continue;
+
+            double phi = (1.0/3.0) * (r - 1.5*l0 + 0.5*re_st)
+                                   * (r - re_st) * (r - re_st);
+
+            for (int d = 0; d < DIM; d++)
+                ps->particles[i].acc[d] += coeff * phi * dr[d] / r;
+        }
+    }
+}
+
+/*
  * 粒子間衝突モデル（越塚 2003 に基づく）
  *
  * 粒子間距離が collision_dist = 0.5 * l0 を下回り、かつ接近中

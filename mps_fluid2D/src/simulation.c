@@ -26,6 +26,8 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
 {
     (void)step;
     double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
+    if (g_config->surface_tension_enabled)
+        re = fmax(re, g_config->influence_radius_st);
     double dt = g_config->dt;
 
     /* === 陽的ステップ === */
@@ -43,6 +45,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
 
     /* 粘性項の計算（accに加算） */
     calc_viscosity_term(ps, nl);
+
+    /* 表面張力の計算（accに加算） */
+    if (g_config->surface_tension_enabled)
+        calc_surface_tension(ps, nl);
 
     /* 仮速度の更新 */
     for (int i = 0; i < ps->num; i++) {
@@ -108,6 +114,8 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
 void simulation_run(ParticleSystem *ps)
 {
     double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
+    if (g_config->surface_tension_enabled)
+        re = fmax(re, g_config->influence_radius_st);
     double dt = g_config->dt;
     int total_steps = (int)(g_config->t_end / dt);
     int out_interval = g_config->output_interval;
