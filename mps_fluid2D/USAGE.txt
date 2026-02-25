@@ -43,9 +43,7 @@
 
   方法2: 直接実行
 
-    $ ./mps_sim
-
-  コマンドライン引数は不要。全パラメータは include/config.h で定義されている。
+    $ ./mps_sim examples/dambreak/cal.txt
 
   実行すると output/ ディレクトリに結果ファイルが出力される。
   output/ ディレクトリが存在しない場合は事前に作成すること:
@@ -132,36 +130,44 @@
 7. パラメータの変更
 --------------------------------------------------------------------------------
 
-  全てのシミュレーションパラメータは include/config.h に定義されている。
-  変更後は再ビルドが必要:
+  全てのシミュレーションパラメータは examples/dambreak/params.txt に記述する。
+  変更後の再ビルドは不要。初期条件を作り直す場合は tools/gen_dambreak.py を使う。
 
-    $ make clean && make
+    $ python3 tools/gen_dambreak.py --l0 0.008 --clamp_negative_pressure 1
 
   7.1 よく変更するパラメータ
 
-    パラメータ              説明                          デフォルト値
-    -----------------------------------------------------------------------
-    PARTICLE_DISTANCE       粒子間距離 (小さいほど高解像度) 0.025 m
-    DT                      時間刻み (安定性に影響)         5.0e-4 s
-    T_END                   シミュレーション終了時刻        2.0 s
-    OUTPUT_INTERVAL         出力間隔 (ステップ数)           100
-    WATER_X                 水柱の幅                       0.25 m
-    WATER_Y                 水柱の高さ                     0.50 m
+    パラメータ                    説明                           デフォルト値
+    ---------------------------------------------------------------------------
+    particle_distance             粒子間距離 (小さいほど高解像度) 0.008 m
+    dt                            時間刻み (安定性に影響)         5.0e-4 s
+    t_end                         シミュレーション終了時刻        2.0 s
+    output_interval               出力間隔 (ステップ数)           100
+    solver_type                   圧力ソルバー (0=CG, 1=ICCG)    1
+    relaxation_coeff              圧力緩和係数                   0.2
+    clamp_negative_pressure       負圧クランプ (0=無効, 1=有効)  1
 
-  7.2 壁貫通防止パラメータ
+  7.2 壁境界・衝突パラメータ
 
-    パラメータ              説明                          デフォルト値
-    -----------------------------------------------------------------------
-    CFL_NUMBER              CFL速度制限係数                0.2
-    WALL_REPULSION_COEFF    壁面反発力の強さ               196.2
-    WALL_RESTITUTION        壁面反射の反発係数             0.2
+    パラメータ                    説明                           デフォルト値
+    ---------------------------------------------------------------------------
+    restitution_coeff             粒子間衝突の反発係数           0.2
+    collision_distance_ratio      衝突判定距離 = ratio × l0      0.5
+    surface_threshold             自由表面判定閾値 (n/n0)        0.97
 
-  7.3 解像度を上げる場合の注意
+  7.3 clamp_negative_pressure について
 
-    PARTICLE_DISTANCE を小さくすると粒子数が増加する。
-    粒子数が MAX_PARTICLES (10000) を超える場合は MAX_PARTICLES も増やすこと。
+    PPE (圧力ポアソン方程式) 求解後、流体粒子の圧力 P < 0 を 0 に置換する。
+    引張不安定性（粒子の凝集・クラスタリング）を抑制する効果がある。
+
+      clamp_negative_pressure=0  : 負圧を許容 (従来の標準MPS)
+      clamp_negative_pressure=1  : 負圧を 0 にクランプ (安定性向上)
+
+  7.4 解像度を上げる場合の注意
+
+    particle_distance を小さくすると粒子数が増加する。
     粒子数の増加に伴い計算時間も増加する (近傍探索が O(N^2))。
-    解像度を上げる場合は DT も小さくする必要がある場合がある。
+    解像度を上げる場合は dt も小さくする必要がある場合がある。
 
 
 8. トラブルシューティング
@@ -169,20 +175,21 @@
 
   8.1 シミュレーションが発散する
 
-    - DT を小さくする (例: 2.5e-4)
-    - PARTICLE_DISTANCE とのバランスを確認
-    - CFL_NUMBER を小さくする (例: 0.1)
+    - dt を小さくする (例: 2.5e-4)
+    - particle_distance とのバランスを確認
+    - clamp_negative_pressure=1 に設定する (引張不安定性の抑制)
 
   8.2 流体粒子が急速に減少する
 
     - 粒子が壁を突き抜けてゴースト化している可能性
-    - WALL_REPULSION_COEFF を大きくする
-    - DT を小さくする
+    - dt を小さくする
+    - wall_layers / dummy_layers を増やす
 
   8.3 圧力が振動する
 
-    - RELAXATION_COEFF を小さくする (例: 0.1)
-    - SURFACE_THRESHOLD を調整する
+    - relaxation_coeff を小さくする (例: 0.1)
+    - surface_threshold を調整する
+    - clamp_negative_pressure=1 に設定する
 
   8.4 コンパイルエラー
 

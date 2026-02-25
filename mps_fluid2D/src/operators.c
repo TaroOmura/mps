@@ -124,6 +124,22 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
 }
 
 /*
+ * 負圧クランプ
+ *   流体粒子の圧力を max(P_i, 0) に制限する。
+ *   引張不安定性（粒子の凝集）を抑制する効果がある。
+ *   params.txt の clamp_negative_pressure=1 のとき solve_pressure 直後に呼ぶ。
+ */
+void clamp_pressure(ParticleSystem *ps)
+{
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type == FLUID_PARTICLE &&
+            ps->particles[i].pressure < 0.0) {
+            ps->particles[i].pressure = 0.0;
+        }
+    }
+}
+
+/*
  * 自由表面判定
  *   粒子数密度 n_i < threshold * n0 なら自由表面とみなす
  */

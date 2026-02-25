@@ -14,6 +14,6 @@ void simulation_run(ParticleSystem *ps);
 /*   4. 自由表面判定 */
 /*   5. 圧力ポアソン方程式の求解 (陰的) */
 /*   6. 圧力勾配による速度・位置の修正 */
-void simulation_step(ParticleSystem *ps, NeighborList *nl, int step);
+void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int step);
 
 #endif /* SIMULATION_H */

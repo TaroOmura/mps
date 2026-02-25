@@ -39,10 +39,11 @@ void config_set_defaults(SimConfig *config)
     config->t_end           = 2.0;
     config->output_interval = 100;
 
-    config->solver_type      = 0;       /* 0: CG, 1: ICCG */
-    config->cg_max_iter      = 10000;
-    config->cg_tolerance     = 1.0e-8;
-    config->relaxation_coeff = 0.2;
+    config->solver_type             = 0;       /* 0: CG, 1: ICCG */
+    config->cg_max_iter             = 10000;
+    config->cg_tolerance            = 1.0e-8;
+    config->relaxation_coeff        = 0.2;
+    config->clamp_negative_pressure = 0;
 
     config->surface_threshold = 0.97;
 
@@ -185,6 +186,8 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->cg_tolerance = atof(val_str);
         } else if (strcmp(key, "relaxation_coeff") == 0) {
             config->relaxation_coeff = atof(val_str);
+        } else if (strcmp(key, "clamp_negative_pressure") == 0) {
+            config->clamp_negative_pressure = atoi(val_str);
         } else if (strcmp(key, "surface_threshold") == 0) {
             config->surface_threshold = atof(val_str);
         } else if (strcmp(key, "restitution_coeff") == 0) {
@@ -239,6 +242,7 @@ void config_print(const SimConfig *config)
     printf("cg_max_iter:          %d\n", config->cg_max_iter);
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);
+    printf("clamp_negative_pressure: %s\n", config->clamp_negative_pressure ? "ON" : "OFF");
     printf("surface_threshold:    %.4f\n", config->surface_threshold);
     printf("restitution_coeff:         %.4f\n", config->restitution_coeff);
     printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",

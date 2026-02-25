@@ -22,7 +22,7 @@
  *   7. 圧力ポアソン方程式の求解
  *   8. 圧力勾配による速度・位置の修正
  */
-void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
+void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int step)
 {
     (void)step;
     double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
@@ -66,7 +66,7 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
     /* === 陰的ステップ === */
 
     /* 近傍探索の更新 (仮位置にて) */
-    neighbor_search_brute_force(nl, ps, re);
+    neighbor_search_cell_linked_list(nl, ps, cl, re);
 
     /* 粒子数密度の計算 */
     calc_particle_number_density(ps, nl);
@@ -76,6 +76,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, int step)
 
     /* 圧力ポアソン方程式の求解 */
     solve_pressure(ps, nl);
+
+    /* 負圧クランプ (clamp_negative_pressure=1 のとき) */
+    if (g_config->clamp_negative_pressure)
+        clamp_pressure(ps);
 
     /* 圧力勾配による速度・位置の修正 */
     calc_pressure_gradient(ps, nl);
@@ -116,8 +120,18 @@ void simulation_run(ParticleSystem *ps)
         return;
     }
 
+    /* セルリストの生成 (1回だけ確保して毎ステップ再利用) */
+    CellList *cl = cell_list_create(ps->num, re,
+                                    g_config->domain_min,
+                                    g_config->domain_max);
+    if (!cl) {
+        fprintf(stderr, "Error: failed to create cell list\n");
+        neighbor_list_free(nl);
+        return;
+    }
+
     /* 初期近傍探索 */
-    neighbor_search_brute_force(nl, ps, re);
+    neighbor_search_cell_linked_list(nl, ps, cl, re);
 
     /* 初期状態の出力 */
     output_csv(ps, 0, out_dir);
@@ -126,7 +140,7 @@ void simulation_run(ParticleSystem *ps)
     printf("Starting simulation (2D): %d steps, dt = %.2e\n", total_steps, dt);
 
     for (int step = 1; step <= total_steps; step++) {
-        simulation_step(ps, nl, step);
+        simulation_step(ps, nl, cl, step);
 
         if (step % out_interval == 0) {
             int fluid_count = 0;
@@ -143,5 +157,6 @@ void simulation_run(ParticleSystem *ps)
     }
 
     printf("Simulation complete.\n");
+    cell_list_free(cl);
     neighbor_list_free(nl);
 }
