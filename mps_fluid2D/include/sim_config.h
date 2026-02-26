@@ -32,11 +32,16 @@ typedef struct {
     int    solver_type;           /* 線形ソルバー (0: CG, 1: ICCG) */
     int    cg_max_iter;           /* CG法の最大反復数 */
     double cg_tolerance;          /* CG法の収束判定閾値 */
-    double relaxation_coeff;      /* 圧力の緩和係数 */
+    double relaxation_coeff;      /* 圧力の緩和係数 (ppe_type=0 のみ使用) */
     int    clamp_negative_pressure; /* 負圧クランプ (0: 無効, 1: 有効) */
+    int    ppe_type;              /* PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型) */
+    double c_ppe;                 /* Natsui型PPEの対角係数 c (デフォルト 1.01) */
+    double gamma_ppe;             /* Natsui型PPEの密度補正重み γ (デフォルト 0.01) */
 
     /* 自由表面判定 */
-    double surface_threshold;    /* n/n0 がこの値未満なら自由表面 */
+    double surface_threshold;        /* n/n0 がこの値未満なら自由表面 (method=0) */
+    int    surface_detection_method; /* 0: 粒子数密度 (既存), 1: 近傍粒子数 (Natsui) */
+    double surface_count_threshold;  /* Ni/(N0) がこの値未満なら自由表面 (method=1) */
 
     /* 衝突モデル */
     double restitution_coeff;       /* 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) */

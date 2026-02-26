@@ -71,7 +71,6 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
     double max_n0         = 0.0;
     double max_lambda_num = 0.0;
     double max_lambda_den = 0.0;
-    double max_phi_sum    = 0.0;
 
     int found = 0;
     for (int i = 0; i < ps->num; i++) {
@@ -80,7 +79,6 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         double n0_i         = 0.0;
         double lambda_num_i = 0.0;
         double lambda_den_i = 0.0;
-        double phi_sum_i    = 0.0;
 
         for (int j = 0; j < ps->num; j++) {
             if (j == i) continue;
@@ -102,20 +100,12 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
                 lambda_num_i += r2 * wl;
                 lambda_den_i += wl;
             }
-
-            /* phi_sum: 表面張力用ポテンシャルの和 */
-            if (r < re_st) {
-                double phi = (1.0/3.0) * (r - 1.5*l0 + 0.5*re_st)
-                                       * (r - re_st) * (r - re_st);
-                phi_sum_i += phi;
-            }
         }
 
         if (n0_i > max_n0) {
             max_n0         = n0_i;
             max_lambda_num = lambda_num_i;
             max_lambda_den = lambda_den_i;
-            max_phi_sum    = phi_sum_i;
             found = 1;
         }
     }
@@ -128,6 +118,28 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
     }
 
     ps->n0 = max_n0;
+
+    /* 基準近傍粒子数 N0 の計算 (Natsui法用: influence_radius_n 内の粒子数の最大値) */
+    {
+        int max_count = 0;
+        double re_n2 = re_n * re_n;
+        for (int i = 0; i < ps->num; i++) {
+            if (ps->particles[i].type != FLUID_PARTICLE) continue;
+            int count = 0;
+            for (int j = 0; j < ps->num; j++) {
+                if (j == i) continue;
+                double r2 = 0.0;
+                for (int d = 0; d < DIM; d++) {
+                    double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                    r2 += diff * diff;
+                }
+                if (r2 < re_n2) count++;
+            }
+            if (count > max_count) max_count = count;
+        }
+        ps->n0_count = max_count;
+    }
+
     if (g_config->use_analytical_lambda) {
         ps->lambda = re_lap * re_lap * (double)DIM * (double)(DIM - 1)
                      / ((double)(DIM + 1) * (double)(DIM + 2));
@@ -135,15 +147,34 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
     }
 
-    if (g_config->surface_tension_enabled && max_phi_sum > 1.0e-30) {
-        ps->C_LL = 2.0 * g_config->surface_tension_coeff
-                   * l0 * l0 / max_phi_sum;
-    } else {
-        ps->C_LL = 0.0;
-    }
+    if (g_config->surface_tension_enabled) {
+    int nmax = (int)ceil(re_st / l0);
+    double sum = 0;
+    
+    // 界面(x=0)をまたぐ粒子間の相互作用エネルギーの総和を計算
+    for (int dxa = 1; dxa <= nmax; dxa++) {     // 右側の粒子（x > 0）
+        for (int dxb = -(nmax - 1); dxb <= 0; dxb++) { // 左側の粒子（x <= 0）
+            for (int dyb = -nmax; dyb <= nmax; dyb++) { // y方向の広がり
+                double rx = (double)(dxa - dxb) * l0;
+                double ry = (double)dyb * l0;
+                double rab = sqrt(rx * rx + ry * ry);
 
-    printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)%s\n",
-           ps->n0, re_n, ps->lambda, re_lap,
+                if (rab > 0 && rab < re_st) {
+                    // ポテンシャル Φ(r) の計算
+                    sum += (1.0/3.0) * (rab - 1.5*l0 + 0.5*re_st) * (rab - re_st) * (rab - re_st);
+                }
+            }
+        }
+    }
+    
+    // 2次元の場合の C_LL 決定式
+    if (sum > 0) {
+        ps->C_LL = g_config->surface_tension_coeff *l0/ sum;
+    }
+}
+
+    printf("Initial params: n0 = %.6f (re_n=%.4f)  N0 = %d  lambda = %.6f (re_lap=%.4f)%s\n",
+           ps->n0, re_n, ps->n0_count, ps->lambda, re_lap,
            g_config->use_analytical_lambda ? "  [analytical]" : "");
     if (g_config->surface_tension_enabled)
         printf("  C_LL = %.6e (re_st=%.4f)\n", ps->C_LL, re_st);

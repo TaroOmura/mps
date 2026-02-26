@@ -44,8 +44,13 @@ void config_set_defaults(SimConfig *config)
     config->cg_tolerance            = 1.0e-8;
     config->relaxation_coeff        = 0.2;
     config->clamp_negative_pressure = 0;
+    config->ppe_type                = 0;       /* 0: 既存密度型, 1: Natsui弱圧縮型 */
+    config->c_ppe                   = 1.01;
+    config->gamma_ppe               = 0.01;
 
-    config->surface_threshold = 0.97;
+    config->surface_threshold        = 0.97;
+    config->surface_detection_method = 0;
+    config->surface_count_threshold  = 0.85;
 
     config->restitution_coeff        = 0.2;
     config->collision_distance_ratio = 0.5;
@@ -193,8 +198,18 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->relaxation_coeff = atof(val_str);
         } else if (strcmp(key, "clamp_negative_pressure") == 0) {
             config->clamp_negative_pressure = atoi(val_str);
+        } else if (strcmp(key, "ppe_type") == 0) {
+            config->ppe_type = atoi(val_str);
+        } else if (strcmp(key, "c_ppe") == 0) {
+            config->c_ppe = atof(val_str);
+        } else if (strcmp(key, "gamma_ppe") == 0) {
+            config->gamma_ppe = atof(val_str);
         } else if (strcmp(key, "surface_threshold") == 0) {
             config->surface_threshold = atof(val_str);
+        } else if (strcmp(key, "surface_detection_method") == 0) {
+            config->surface_detection_method = atoi(val_str);
+        } else if (strcmp(key, "surface_count_threshold") == 0) {
+            config->surface_count_threshold = atof(val_str);
         } else if (strcmp(key, "restitution_coeff") == 0) {
             config->restitution_coeff = atof(val_str);
         } else if (strcmp(key, "collision_distance_ratio") == 0) {
@@ -255,7 +270,17 @@ void config_print(const SimConfig *config)
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);
     printf("clamp_negative_pressure: %s\n", config->clamp_negative_pressure ? "ON" : "OFF");
+    printf("ppe_type:             %d  (%s)\n",
+           config->ppe_type,
+           config->ppe_type == 1 ? "Natsui weakly-compressible" : "density-based");
+    if (config->ppe_type == 1)
+        printf("  c_ppe = %.4f  gamma_ppe = %.4f\n", config->c_ppe, config->gamma_ppe);
     printf("surface_threshold:    %.4f\n", config->surface_threshold);
+    printf("surface_detection_method: %d  (%s)\n",
+           config->surface_detection_method,
+           config->surface_detection_method == 1 ? "neighbor_count (Natsui)" : "number_density");
+    if (config->surface_detection_method == 1)
+        printf("surface_count_threshold:  %.4f\n", config->surface_count_threshold);
     printf("restitution_coeff:         %.4f\n", config->restitution_coeff);
     printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",
            config->collision_distance_ratio,

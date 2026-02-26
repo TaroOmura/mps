@@ -234,6 +234,40 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
     double dt2 = dt * dt;
 
     /*
+     * Natsui弱圧縮型PPE用: 速度発散 div(u*)_i の事前計算
+     *   div(u*)_i = (d/n0) * Σ_{j≠i} [(uj* - ui*) · (rj - ri) / |rj-ri|²] * w(rij)
+     */
+    double *vel_div = NULL;
+    if (g_config->ppe_type == 1) {
+        vel_div = (double *)calloc(n, sizeof(double));
+        if (!vel_div) {
+            fprintf(stderr, "Error: velocity divergence buffer allocation failed\n");
+            return;
+        }
+        for (int i = 0; i < n; i++) {
+            if (ps->particles[i].type != FLUID_PARTICLE) continue;
+            double div_u = 0.0;
+            for (int k = 0; k < nl->count[i]; k++) {
+                int j = neighbor_get(nl, i, k);
+                if (ps->particles[j].type == DUMMY_PARTICLE) continue;
+                double r2 = 0.0, dr[DIM];
+                for (int d = 0; d < DIM; d++) {
+                    dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                    r2 += dr[d] * dr[d];
+                }
+                if (r2 < 1.0e-24) continue;
+                double r = sqrt(r2);
+                double w = kernel_weight(r, re);
+                double dv_dot_dr = 0.0;
+                for (int d = 0; d < DIM; d++)
+                    dv_dot_dr += (ps->particles[j].vel[d] - ps->particles[i].vel[d]) * dr[d];
+                div_u += dv_dot_dr / r2 * w;
+            }
+            vel_div[i] = (double)DIM / n0 * div_u;
+        }
+    }
+
+    /*
      * 未知数のマッピング
      *   eq_idx[i] >= 0 : 未知数として求解
      *   eq_idx[i] == -1: ディリクレ条件 P = 0
@@ -297,17 +331,29 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
         }
 
         /* 対角要素 */
-        M[ei * n_eq + ei] = coeff * sum_w;
+        if (g_config->ppe_type == 1)
+            M[ei * n_eq + ei] = g_config->c_ppe * coeff * sum_w;
+        else
+            M[ei * n_eq + ei] = coeff * sum_w;
 
         /* 右辺 */
         if (ps->particles[i].type == WALL_PARTICLE) {
             c[ei] = 0.0;
+        } else if (g_config->ppe_type == 1) {
+            /*
+             * Natsui弱圧縮型:
+             *   LHS: (2d/λn0) Σ(Pj - c·Pi)·wij = (ρ0/dt)·div(u*) + γ·(ρ0/dt²)·(n0-ni*)/n0
+             *   行列の符号規則 (A*x = b, A = -ラプラシアン) に変換:
+             *   b = -(ρ0/dt)·div(u*) + γ·(ρ0/dt²)·(ni*-n0)/n0
+             */
+            c[ei] = -g_config->density / dt * vel_div[i]
+                    + g_config->gamma_ppe * (g_config->density / dt2)
+                      * (ps->particles[i].n - n0) / n0;
         } else {
+            /* 既存密度型: relaxation_coeff で緩和 */
             c[ei] = (g_config->density / dt2) * (ps->particles[i].n - n0) / n0;
+            c[ei] *= g_config->relaxation_coeff;
         }
-
-        /* 緩和係数を適用 */
-        c[ei] *= g_config->relaxation_coeff;
     }
 
     /* ソルバーの選択 */
@@ -334,4 +380,5 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
     free(M);
     free(c);
     free(x);
+    free(vel_div);
 }

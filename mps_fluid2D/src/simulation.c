@@ -74,11 +74,18 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
     /* 近傍探索の更新 (仮位置にて) */
     neighbor_search_cell_linked_list(nl, ps, cl, re);
 
-    /* 粒子数密度の計算 */
+    /* 粒子数密度の計算 (PPEのRHSで常に必要) */
     calc_particle_number_density(ps, nl);
 
     /* 自由表面判定 */
-    judge_free_surface(ps, g_config->surface_threshold);
+    if (g_config->surface_detection_method == 1) {
+        /* Natsui法: 近傍粒子数 Ni < beta * N0 */
+        calc_neighbor_count(ps, nl);
+        judge_free_surface_by_count(ps, g_config->surface_count_threshold);
+    } else {
+        /* 既存手法: 粒子数密度 n_i < threshold * n0 */
+        judge_free_surface(ps, g_config->surface_threshold);
+    }
 
     /* 圧力ポアソン方程式の求解 */
     solve_pressure(ps, nl);

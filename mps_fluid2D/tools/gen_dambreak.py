@@ -33,7 +33,7 @@ def main():
 
     # 物性値
     parser.add_argument("--density", type=float, default=1000.0, help="密度 [kg/m^3]")
-    parser.add_argument("--viscosity", type=float, default=1.0e-6, help="動粘性係数 [m^2/s]")
+    parser.add_argument("--viscosity", type=float, default=0, help="動粘性係数 [m^2/s]")
     parser.add_argument("--gravity_y", type=float, default=-9.81, help="重力y成分 [m/s^2]")
 
     # 時間設定
@@ -53,6 +53,28 @@ def main():
     parser.add_argument("--collision_distance_ratio", type=float, default=0.5,
                         help="衝突判定距離の係数 (col_dist = ratio * l0)")
 
+    # PPE定式化
+    parser.add_argument("--ppe_type", type=int, default=0,
+                        help="PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型)")
+    parser.add_argument("--c_ppe", type=float, default=1.01,
+                        help="Natsui型PPEの対角係数 c")
+    parser.add_argument("--gamma_ppe", type=float, default=0.01,
+                        help="Natsui型PPEの密度補正重み γ")
+
+    # 自由表面判定
+    parser.add_argument("--surface_detection_method", type=int, default=0,
+                        help="自由表面判定法 (0: 粒子数密度, 1: 近傍粒子数)")
+    parser.add_argument("--surface_count_threshold", type=float, default=0.85,
+                        help="近傍粒子数法の閾値 (method=1 のみ使用)")
+
+    # 表面張力
+    parser.add_argument("--surface_tension_enabled", type=int, default=0,
+                        help="表面張力の有効化 (0: 無効, 1: 有効)")
+    parser.add_argument("--sigma", type=float, default=0.073,
+                        help="表面張力係数 σ [N/m]")
+    parser.add_argument("--surface_tension_re_ratio", type=float, default=3.2,
+                        help="表面張力影響半径の倍率 (re_st = ratio * l0)")
+
     # λ計算方法
     parser.add_argument("--use_analytical_lambda", type=int, default=0,
                         help="1: λを解析解で計算, 0: 初期粒子配置から計算 (default: 0)")
@@ -60,7 +82,7 @@ def main():
     # 出力先
     parser.add_argument("--outdir", type=str, default="examples/dambreak",
                         help="ファイル出力先ディレクトリ")
-    parser.add_argument("--output_dir", type=str, default="output",
+    parser.add_argument("--output_dir", type=str, default="output/dambreak",
                         help="シミュレーション出力ディレクトリ名")
 
     args = parser.parse_args()
@@ -178,13 +200,23 @@ def main():
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")
         f.write(f"clamp_negative_pressure {args.clamp_negative_pressure}\n")
+        f.write(f"ppe_type             {args.ppe_type}\n")
+        f.write(f"c_ppe                {args.c_ppe}\n")
+        f.write(f"gamma_ppe            {args.gamma_ppe}\n")
         f.write("#\n")
         f.write("# Free surface\n")
         f.write(f"surface_threshold    0.97\n")
+        f.write(f"surface_detection_method {args.surface_detection_method}\n")
+        f.write(f"surface_count_threshold  {args.surface_count_threshold}\n")
         f.write("#\n")
         f.write("# Collision model\n")
         f.write(f"restitution_coeff        {args.restitution_coeff}\n")
         f.write(f"collision_distance_ratio {args.collision_distance_ratio}\n")
+        f.write("#\n")
+        f.write("# Surface tension\n")
+        f.write(f"surface_tension_enabled  {args.surface_tension_enabled}\n")
+        f.write(f"surface_tension_coeff    {args.sigma}\n")
+        f.write(f"surface_tension_re_ratio {args.surface_tension_re_ratio}\n")
         f.write("#\n")
         f.write("# Domain\n")
         f.write(f"domain_x_min         0.0\n")

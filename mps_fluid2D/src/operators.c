@@ -140,8 +140,8 @@ void clamp_pressure(ParticleSystem *ps)
 }
 
 /*
- * 自由表面判定
- *   粒子数密度 n_i < threshold * n0 なら自由表面とみなす
+ * 自由表面判定 (粒子数密度ベース, 既存手法)
+ *   n_i < threshold * n0 なら自由表面とみなす
  */
 void judge_free_surface(ParticleSystem *ps, double threshold)
 {
@@ -155,25 +155,56 @@ void judge_free_surface(ParticleSystem *ps, double threshold)
 }
 
 /*
- * ポテンシャル型表面張力（腰塚多項式ポテンシャル）
- *
- *   φ(r) = (1/3) * (r - 1.5*l0 + 0.5*re_st) * (r - re_st)^2  (r < re_st)
- *
- *   F_i = (C_LL / ρ) * Σ_{j: FLUID} φ(r_ij) * (r_j - r_i) / r_ij
- *
- * C_LL は初期配置の最内部粒子の Σφ から計算され ParticleSystem に保存される。
+ * 近傍粒子数の計算 (Natsui法用)
+ *   influence_radius_n 内の粒子数を Ni として各粒子に記録する
  */
+void calc_neighbor_count(ParticleSystem *ps, NeighborList *nl)
+{
+    double re2 = g_config->influence_radius_n * g_config->influence_radius_n;
+
+    for (int i = 0; i < ps->num; i++) {
+        int count = 0;
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            double r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += diff * diff;
+            }
+            if (r2 < re2) count++;
+        }
+        ps->particles[i].neighbor_count = count;
+    }
+}
+
+/*
+ * 自由表面判定 (近傍粒子数ベース, Natsui法)
+ *   Ni < beta * N0 なら自由表面とみなす
+ */
+void judge_free_surface_by_count(ParticleSystem *ps, double beta)
+{
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type == FLUID_PARTICLE) {
+            ps->particles[i].on_surface =
+                (ps->particles[i].neighbor_count < beta * ps->n0_count) ? 1 : 0;
+        } else {
+            ps->particles[i].on_surface = 0;
+        }
+    }
+}
+
 void calc_surface_tension(ParticleSystem *ps, NeighborList *nl)
 {
     double re_st = g_config->influence_radius_st;
-    double l0    = g_config->particle_distance;
-    double coeff = ps->C_LL / g_config->density;
+    double l0    = g_config->particle_distance; 
+    double coeff = ps->C_LL / (g_config->density*l0*l0);
 
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
 
         for (int k = 0; k < nl->count[i]; k++) {
             int j = neighbor_get(nl, i, k);
+            // 相手も流体粒子である必要がある
             if (ps->particles[j].type != FLUID_PARTICLE) continue;
 
             double dr[DIM], r2 = 0.0;
@@ -182,13 +213,21 @@ void calc_surface_tension(ParticleSystem *ps, NeighborList *nl)
                 r2 += dr[d] * dr[d];
             }
             double r = sqrt(r2);
-            if (r < 1.0e-12 * l0 || r >= re_st) continue;
+            
+            // 近すぎ、または遠すぎをスキップ
+            if (r < 1.0e-9 * l0 || r >= re_st) continue;
 
-            double phi = (1.0/3.0) * (r - 1.5*l0 + 0.5*re_st)
-                                   * (r - re_st) * (r - re_st);
+            // 腰塚ポテンシャルの負の微分 = 粒子間力の大きさ
+            // f(r) = -(r - l0) * (r - re_st)
+            // r < l0 のとき force_mag < 0 → dr方向と逆向き → 斥力
+            // l0 < r < re_st のとき force_mag > 0 → dr方向と同向き → 引力
+            double force_mag = -(r - l0) * (r - re_st);
 
-            for (int d = 0; d < DIM; d++)
-                ps->particles[i].acc[d] += coeff * phi * dr[d] / r;
+            // 加速度に加算
+            for (int d = 0; d < DIM; d++) {
+                // 方向ベクトル (dr/r) を掛けてベクトル化
+                ps->particles[i].acc[d] += coeff * force_mag * (dr[d] / r);
+            }
         }
     }
 }
