@@ -20,6 +20,8 @@ ParticleSystem *particle_system_create(int capacity)
     ps->capacity = capacity;
     ps->n0 = 0.0;
     ps->lambda = 0.0;
+    ps->C_LL = 0.0;
+    ps->n0_count = 0;
     return ps;
 }
 
@@ -65,6 +67,8 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
 {
     double re_n   = g_config->influence_radius_n;
     double re_lap = g_config->influence_radius_lap;
+    double re_st  = g_config->influence_radius_st;
+    double l0     = g_config->particle_distance;
 
     double max_n0        = 0.0;
     double max_lambda_num = 0.0;
@@ -116,6 +120,28 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
     }
 
     ps->n0 = max_n0;
+
+    /* 基準近傍粒子数 N0 の計算 (Natsui法用: surface_detection_method=1 のときのみ) */
+    if (g_config->surface_detection_method == 1) {
+        int max_count = 0;
+        double re_n2 = re_n * re_n;
+        for (int i = 0; i < ps->num; i++) {
+            if (ps->particles[i].type != FLUID_PARTICLE) continue;
+            int count = 0;
+            for (int j = 0; j < ps->num; j++) {
+                if (j == i) continue;
+                double r2 = 0.0;
+                for (int d = 0; d < DIM; d++) {
+                    double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                    r2 += diff * diff;
+                }
+                if (r2 < re_n2) count++;
+            }
+            if (count > max_count) max_count = count;
+        }
+        ps->n0_count = max_count;
+    }
+
     if (g_config->use_analytical_lambda) {
         ps->lambda = re_lap * re_lap * (double)DIM * (double)(DIM - 1)
                      / ((double)(DIM + 1) * (double)(DIM + 2));
@@ -123,7 +149,36 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         ps->lambda = (max_lambda_den > 1.0e-10) ? max_lambda_num / max_lambda_den : 1.0;
     }
 
-    printf("Initial params: n0 = %.6f (re_n=%.4f)  lambda = %.6f (re_lap=%.4f)%s\n",
-           ps->n0, re_n, ps->lambda, re_lap,
+    /* 表面張力係数 C_LL の校正 (Colagrossi/Natsui型ポテンシャル)
+     * 界面(x=0)をまたぐ粒子ペアの相互作用エネルギー総和 sum から
+     *   C_LL = σ * l0² / sum  (3D)
+     */
+    if (g_config->surface_tension_enabled) {
+        int nmax = (int)ceil(re_st / l0);
+        double sum = 0.0;
+        for (int dxa = 1; dxa <= nmax; dxa++) {
+            for (int dxb = -(nmax - 1); dxb <= 0; dxb++) {
+                for (int dyb = -nmax; dyb <= nmax; dyb++) {
+                    for (int dzb = -nmax; dzb <= nmax; dzb++) {
+                        double rx = (double)(dxa - dxb) * l0;
+                        double ry = (double)dyb * l0;
+                        double rz = (double)dzb * l0;
+                        double rab = sqrt(rx * rx + ry * ry + rz * rz);
+                        if (rab > 0.0 && rab < re_st) {
+                            sum += (1.0 / 3.0) * (rab - 1.5 * l0 + 0.5 * re_st)
+                                   * (rab - re_st) * (rab - re_st);
+                        }
+                    }
+                }
+            }
+        }
+        if (sum > 0.0)
+            ps->C_LL = g_config->surface_tension_coeff * l0 * l0 / sum;
+    }
+
+    printf("Initial params: n0 = %.6f (re_n=%.4f)  N0 = %d  lambda = %.6f (re_lap=%.4f)%s\n",
+           ps->n0, re_n, ps->n0_count, ps->lambda, re_lap,
            g_config->use_analytical_lambda ? "  [analytical]" : "");
+    if (g_config->surface_tension_enabled)
+        printf("  C_LL = %.6e (re_st=%.4f)\n", ps->C_LL, re_st);
 }

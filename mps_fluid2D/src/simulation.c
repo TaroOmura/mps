@@ -47,8 +47,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
     calc_viscosity_term(ps, nl);
 
     /* 表面張力の計算（accに加算） */
-    if (g_config->surface_tension_enabled)
+    if (g_config->surface_tension_enabled) {
         calc_surface_tension(ps, nl);
+        calc_surface_tension_SL(ps, nl);
+    }
 
     /* 仮速度の更新 */
     for (int i = 0; i < ps->num; i++) {

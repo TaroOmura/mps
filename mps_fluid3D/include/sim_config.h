@@ -32,22 +32,39 @@ typedef struct {
     int    solver_type;           /* 線形ソルバー (0: CG, 1: ICCG) */
     int    cg_max_iter;           /* CG法の最大反復数 */
     double cg_tolerance;          /* CG法の収束判定閾値 */
-    double relaxation_coeff;      /* 圧力の緩和係数 */
+    double relaxation_coeff;      /* 圧力の緩和係数 (ppe_type=0 のみ使用) */
     int    clamp_negative_pressure; /* 負圧クランプ (0: 無効, 1: 有効) */
+    int    ppe_type;              /* PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型) */
+    double c_ppe;                 /* Natsui型PPEの対角係数 c (デフォルト 1.01) */
+    double gamma_ppe;             /* Natsui型PPEの密度補正重み γ (デフォルト 0.01) */
 
     /* 自由表面判定 */
-    double surface_threshold;   /* n/n0 がこの値未満なら自由表面 */
+    double surface_threshold;        /* n/n0 がこの値未満なら自由表面 (method=0) */
+    int    surface_detection_method; /* 0: 粒子数密度 (既存), 1: 近傍粒子数 (Natsui) */
+    double surface_count_threshold;  /* Ni/N0 がこの値未満なら自由表面 (method=1) */
 
     /* 衝突モデル */
     double restitution_coeff;        /* 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) */
     double collision_distance_ratio; /* 衝突判定距離の係数 (col_dist = ratio * l0) */
 
+    /* 表面張力 */
+    int    surface_tension_enabled;   /* 0: 無効, 1: 有効 */
+    double surface_tension_coeff;     /* 表面張力係数 σ [N/m] */
+    double surface_tension_re_ratio;  /* re_st の倍率 (re_st = ratio * l0) */
+    double influence_radius_st;       /* re_st [m] (自動計算) */
+
     /* 計算領域 */
     double domain_min[DIM];     /* 領域の最小座標 */
     double domain_max[DIM];     /* 領域の最大座標 */
 
+    /* 圧力勾配モデル */
+    int    cmps_gradient;         /* 対称型勾配 (0: 標準 P_j-P_min, 1: CMPS P_i+P_j-P_imin-P_jmin) */
+
     /* λ計算方法 */
     int    use_analytical_lambda; /* λを解析解で計算 (0: 初期粒子配置から計算, 1: 解析解) */
+
+    /* HSモード (High order Source term) */
+    int    hs_mode;               /* 0: 標準ソース項, 1: 高次ソース項 (HS) */
 
     /* 出力設定 */
     char   output_dir[256];     /* 出力ディレクトリ */

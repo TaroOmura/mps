@@ -47,18 +47,27 @@ typedef struct {
     double restitution_coeff;       /* 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) */
     double collision_distance_ratio; /* 衝突判定距離の係数 (col_dist = ratio * l0) */
 
-    /* 表面張力 */
+    /* 表面張力 (液液) */
     int    surface_tension_enabled;   /* 0: 無効, 1: 有効 */
-    double surface_tension_coeff;     /* 表面張力係数 σ [N/m] */
+    double surface_tension_coeff;     /* 液液表面張力係数 σ_LL [N/m] */
     double surface_tension_re_ratio;  /* re_st の倍率 (re_st = ratio * l0) */
     double influence_radius_st;       /* re_st [m] (自動計算) */
+
+    /* 固液表面張力 (濡れ) */
+    double wetting_angle_SL;          /* 静的接触角 θ [deg] (params.txtで指定) */
 
     /* 計算領域 */
     double domain_min[DIM];      /* 領域の最小座標 */
     double domain_max[DIM];      /* 領域の最大座標 */
 
+    /* 圧力勾配モデル */
+    int    cmps_gradient;         /* 対称型勾配 (0: 標準 P_j-P_min, 1: CMPS P_i+P_j-P_imin-P_jmin) */
+
     /* λ計算方法 */
     int    use_analytical_lambda; /* λを解析解で計算 (0: 初期粒子配置から計算, 1: 解析解) */
+
+    /* HSモード (High order Source term) */
+    int    hs_mode;               /* 0: 標準ソース項, 1: 高次ソース項 (HS) */
 
     /* 出力設定 */
     char   output_dir[256];      /* 出力ディレクトリ */

@@ -22,7 +22,9 @@ output_interval      100
 #
 # Pressure solver
 solver_type          1
+cmps_gradient        0
 use_analytical_lambda 0
+hs_mode              1
 cg_max_iter          10000
 cg_tolerance         1.0e-8
 relaxation_coeff     0.2

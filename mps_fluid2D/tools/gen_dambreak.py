@@ -44,6 +44,10 @@ def main():
     # ソルバー設定
     parser.add_argument("--solver_type", type=int, default=1,
                         help="ソルバー種別 (0: CG, 1: ICCG)")
+    parser.add_argument("--cmps_gradient", type=int, default=0,
+                        help="圧力勾配モデル (0: 標準, 1: CMPS対称型)")
+    parser.add_argument("--hs_mode", type=int, default=1,
+                        help="HSモード (0: 標準密度ソース, 1: High order Source term)")
     parser.add_argument("--clamp_negative_pressure", type=int, default=1,
                         help="負圧クランプ (0: 無効, 1: 有効)")
 
@@ -195,7 +199,9 @@ def main():
         f.write("#\n")
         f.write("# Pressure solver\n")
         f.write(f"solver_type          {args.solver_type}\n")
+        f.write(f"cmps_gradient        {args.cmps_gradient}\n")
         f.write(f"use_analytical_lambda {args.use_analytical_lambda}\n")
+        f.write(f"hs_mode              {args.hs_mode}\n")
         f.write(f"cg_max_iter          10000\n")
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")

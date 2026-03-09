@@ -44,14 +44,19 @@ mps_fluid3D/
 ├── obj/                         # オブジェクトファイル (ビルド時に生成, git管理外)
 ├── output/                      # シミュレーション結果の出力先 (git管理外)
 ├── tools/
-│   └── gen_dambreak.py          # ダムブレイク問題の初期条件生成スクリプト
+│   ├── gen_dambreak.py          # ダムブレイク問題の初期条件生成スクリプト
+│   └── gen_droplet.py           # 液滴振動問題の初期条件生成スクリプト
 ├── vis/
 │   └── visualize.py             # 結果の3D可視化スクリプト
 ├── examples/
-│   └── dambreak/                # ダムブレイク問題の入力ファイル
-│       ├── cal.txt              # 計算制御ファイル
-│       ├── params.txt           # パラメータファイル
-│       └── particles.txt        # 粒子初期条件ファイル
+│   ├── dambreak/                # ダムブレイク問題の入力ファイル
+│   │   ├── cal.txt              # 計算制御ファイル
+│   │   ├── params.txt           # パラメータファイル
+│   │   └── particles.txt        # 粒子初期条件ファイル
+│   └── droplet/                 # 液滴振動問題の入力ファイル (gen_droplet.py で生成)
+│       ├── cal.txt
+│       ├── params.txt
+│       └── particles.txt
 ├── Makefile
 ├── .gitignore
 └── README.md
@@ -153,7 +158,8 @@ python3 vis/visualize.py \
 | `influence_ratio_lap` | 2.1 | ラプラシアン用影響半径 / 粒子間距離 |
 | `influence_ratio_n` | 2.1 | 粒子数密度用影響半径 / 粒子間距離 |
 | `max_neighbors` | 512 | 1粒子あたりの最大近傍数 |
-| `wall_layers` | 3 | 壁粒子の層数 |
+| `wall_layers` | 2 | 壁粒子の層数 |
+| `dummy_layers` | 2 | ダミー粒子の層数 |
 
 ### 物性値
 
@@ -180,14 +186,41 @@ python3 vis/visualize.py \
 | `solver_type` | 0 | 線形ソルバー (0: CG法, 1: ICCG法) |
 | `cg_max_iter` | 10000 | 最大反復回数 |
 | `cg_tolerance` | 1.0e-8 | 収束判定閾値 |
-| `relaxation_coeff` | 0.2 | 圧力の緩和係数 |
+| `relaxation_coeff` | 0.2 | 圧力の緩和係数 (`ppe_type=0` のみ使用) |
 | `clamp_negative_pressure` | 0 | 負圧クランプ (0: 無効, 1: 有効) — PPE求解後に流体粒子の P < 0 を 0 に置換する。引張不安定性の抑制に有効。 |
+| `ppe_type` | 0 | PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型) |
+| `c_ppe` | 1.01 | Natsui型PPEの対角係数 c (`ppe_type=1` のみ使用) |
+| `gamma_ppe` | 0.01 | Natsui型PPEの密度補正重み γ (`ppe_type=1` のみ使用) |
 
-### 自由表面・壁境界
+### 自由表面判定
 
 | パラメータ | デフォルト値 | 説明 |
 |---|---|---|
-| `surface_threshold` | 0.97 | 自由表面の判定閾値 (n/n0) |
+| `surface_threshold` | 0.97 | 自由表面の判定閾値 n/n0 (`surface_detection_method=0` のみ使用) |
+| `surface_detection_method` | 0 | 判定方法 (0: 粒子数密度, 1: 近傍粒子数 Natsui法) |
+| `surface_count_threshold` | 0.85 | 近傍粒子数比の閾値 Ni/N0 (`surface_detection_method=1` のみ使用) |
+
+### 衝突モデル
+
+| パラメータ | デフォルト値 | 説明 |
+|---|---|---|
+| `restitution_coeff` | 0.2 | 粒子間衝突の反発係数 e (0: 完全非弾性, 1: 完全弾性) |
+| `collision_distance_ratio` | 0.5 | 衝突判定距離の係数 (col_dist = ratio × l0) |
+
+### 表面張力
+
+| パラメータ | デフォルト値 | 説明 |
+|---|---|---|
+| `surface_tension_enabled` | 0 | 表面張力の有効化 (0: 無効, 1: 有効) |
+| `surface_tension_coeff` | 0.0728 | 表面張力係数 σ [N/m] |
+| `surface_tension_re_ratio` | 3.2 | 表面張力影響半径の倍率 (re_st = ratio × l0) |
+
+### 圧力勾配・λ
+
+| パラメータ | デフォルト値 | 説明 |
+|---|---|---|
+| `cmps_gradient` | 0 | 圧力勾配モデル (0: 標準 P_j-P_min, 1: CMPS対称型 P_i+P_j-P_imin-P_jmin) |
+| `use_analytical_lambda` | 0 | λの計算方法 (0: 初期粒子配置から計算, 1: 解析解) |
 
 ### 計算領域
 
@@ -218,7 +251,7 @@ python3 vis/visualize.py \
 ...
 ```
 
-`type`: 0 = 流体粒子, 1 = 壁粒子, 2 = ダミー粒子
+`type`: 0 = 流体粒子, 1 = 壁粒子, 2 = ゴースト粒子, 3 = ダミー粒子
 
 ## ライセンス
 

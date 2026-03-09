@@ -20,6 +20,9 @@ ParticleSystem *particle_system_create(int capacity)
     ps->capacity = capacity;
     ps->n0 = 0.0;
     ps->lambda = 0.0;
+    ps->C_LL = 0.0;
+    ps->C_SL = 0.0;
+    ps->n0_count = 0;
     return ps;
 }
 
@@ -67,6 +70,7 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
     double re_lap = g_config->influence_radius_lap;
     double re_st  = g_config->influence_radius_st;
     double l0     = g_config->particle_distance;
+    double theta  = g_config->wetting_angle_SL * M_PI / 180.0;
 
     double max_n0         = 0.0;
     double max_lambda_num = 0.0;
@@ -119,8 +123,8 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
 
     ps->n0 = max_n0;
 
-    /* 基準近傍粒子数 N0 の計算 (Natsui法用: influence_radius_n 内の粒子数の最大値) */
-    {
+    /* 基準近傍粒子数 N0 の計算 (Natsui法用: surface_detection_method=1 のときのみ) */
+    if (g_config->surface_detection_method == 1) {
         int max_count = 0;
         double re_n2 = re_n * re_n;
         for (int i = 0; i < ps->num; i++) {
@@ -148,30 +152,57 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
     }
 
     if (g_config->surface_tension_enabled) {
-    int nmax = (int)ceil(re_st / l0);
-    double sum = 0;
-    
-    // 界面(x=0)をまたぐ粒子間の相互作用エネルギーの総和を計算
-    for (int dxa = 1; dxa <= nmax; dxa++) {     // 右側の粒子（x > 0）
-        for (int dxb = -(nmax - 1); dxb <= 0; dxb++) { // 左側の粒子（x <= 0）
-            for (int dyb = -nmax; dyb <= nmax; dyb++) { // y方向の広がり
-                double rx = (double)(dxa - dxb) * l0;
-                double ry = (double)dyb * l0;
-                double rab = sqrt(rx * rx + ry * ry);
+        int nmax = (int)ceil(re_st / l0);
+        double sum = 0.0;
 
-                if (rab > 0 && rab < re_st) {
-                    // ポテンシャル Φ(r) の計算
-                    sum += (1.0/3.0) * (rab - 1.5*l0 + 0.5*re_st) * (rab - re_st) * (rab - re_st);
+        /* 界面(x=0)をまたぐ粒子間の相互作用エネルギーの総和を計算 */
+        for (int dxa = 1; dxa <= nmax; dxa++) {
+            for (int dxb = -(nmax - 1); dxb <= 0; dxb++) {
+                for (int dyb = -nmax; dyb <= nmax; dyb++) {
+                    double rx = (double)(dxa - dxb) * l0;
+                    double ry = (double)dyb * l0;
+                    double rab = sqrt(rx * rx + ry * ry);
+                    if (rab > 0.0 && rab < re_st) {
+                        sum += (1.0 / 3.0) * (rab - 1.5 * l0 + 0.5 * re_st)
+                               * (rab - re_st) * (rab - re_st);
+                    }
                 }
             }
         }
+
+        /* 2次元の場合の C_LL 決定式: C_LL = σ * l0 / sum */
+        if (sum > 0.0)
+            ps->C_LL = g_config->surface_tension_coeff * l0 / sum;
+        
+        double sum_w_LL = 0.0;
+        double sum_w_SL = 0.0;
+
+        for (int dx=0; dx<=nmax; dx++){
+            for (int dy=-nmax; dy<=nmax; dy++){
+                if (dx==0 && dy ==0){continue;}
+                double rx = l0 * dx;
+                double ry = l0 * dy;
+                double r2 = rx*rx + ry*ry;
+                double r = sqrt(r2);
+                if (r <= re_st){
+                    sum_w_LL += 1.0;
+                }
+            }
+        }
+        for (int dx=-nmax; dx<0; dx++){
+            for (int dy=-nmax; dy<=nmax; dy++){
+                double rx = l0 * dx;
+                double ry = l0 * dy;
+                double r2 = rx*rx + ry*ry;
+                double r = sqrt(r2);
+                if (r<=re_st){
+                    sum_w_SL += 1.0;
+                }
+            }
+        }
+
+        ps->C_SL = 0.5 * (1.0 + cos(theta))*ps->C_LL * 2.0 * 17.0/11.0;//sum_w_LL / sum_w_SL;
     }
-    
-    // 2次元の場合の C_LL 決定式
-    if (sum > 0) {
-        ps->C_LL = g_config->surface_tension_coeff *l0/ sum;
-    }
-}
 
     printf("Initial params: n0 = %.6f (re_n=%.4f)  N0 = %d  lambda = %.6f (re_lap=%.4f)%s\n",
            ps->n0, re_n, ps->n0_count, ps->lambda, re_lap,

@@ -22,7 +22,8 @@ typedef struct {
     int       capacity;    /* 配列の確保容量 */
     double    n0;          /* 基準粒子数密度 */
     double    lambda;      /* ラプラシアンモデル用パラメータ */
-    double    C_LL;        /* 表面張力係数 (初期化時に計算・保存) */
+    double    C_LL;        /* 液液表面張力係数 (初期化時に計算・保存) */
+    double    C_SL;        /* 固液表面張力係数 (初期化時に計算・保存) */
     int       n0_count;    /* 基準近傍粒子数 N0 (Natsui法の自由表面判定用) */
 } ParticleSystem;
 

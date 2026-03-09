@@ -14,6 +14,8 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
 {
     (void)step;
     double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
+    if (g_config->surface_tension_enabled)
+        re = fmax(re, g_config->influence_radius_st);
     double dt = g_config->dt;
 
     /* === 陽的ステップ === */
@@ -32,6 +34,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
     /* 粘性項の計算（accに加算） */
     calc_viscosity_term(ps, nl);
 
+    /* 表面張力の計算（accに加算） */
+    if (g_config->surface_tension_enabled)
+        calc_surface_tension(ps, nl);
+
     /* 仮速度の更新 */
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
@@ -49,18 +55,26 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
     }
 
     /* 粒子間衝突処理（孤立粒子の重なりによる圧力爆発を防ぐ） */
-    collision(ps);
+    if (g_config->collision_distance_ratio > 0.0)
+        collision(ps, nl);
 
     /* === 陰的ステップ === */
 
     /* 近傍探索の更新 (仮位置にて) */
     neighbor_search_cell_linked_list(nl, ps, cl, re);
 
-    /* 粒子数密度の計算 */
+    /* 粒子数密度の計算 (PPEのRHSで常に必要) */
     calc_particle_number_density(ps, nl);
 
     /* 自由表面判定 */
-    judge_free_surface(ps, g_config->surface_threshold);
+    if (g_config->surface_detection_method == 1) {
+        /* Natsui法: 近傍粒子数 Ni < beta * N0 */
+        calc_neighbor_count(ps, nl);
+        judge_free_surface_by_count(ps, g_config->surface_count_threshold);
+    } else {
+        /* 既存手法: 粒子数密度 n_i < threshold * n0 */
+        judge_free_surface(ps, g_config->surface_threshold);
+    }
 
     /* 圧力ポアソン方程式の求解 */
     solve_pressure(ps, nl);
@@ -97,6 +111,8 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
 void simulation_run(ParticleSystem *ps)
 {
     double re = fmax(g_config->influence_radius_lap, g_config->influence_radius_n);
+    if (g_config->surface_tension_enabled)
+        re = fmax(re, g_config->influence_radius_st);
     double dt = g_config->dt;
     int total_steps = (int)(g_config->t_end / dt);
     int out_interval = g_config->output_interval;

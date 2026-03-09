@@ -23,22 +23,26 @@ def main():
 
     # 粒子設定
     parser.add_argument("--l0",  type=float, default=0.002, help="粒子間距離 [m]")
-    parser.add_argument("--nx",  type=int,   default=40,    help="x方向の粒子数")
-    parser.add_argument("--ny",  type=int,   default=40,    help="y方向の粒子数")
+    parser.add_argument("--nx",  type=int,   default=40+1,    help="x方向の粒子数")
+    parser.add_argument("--ny",  type=int,   default=40+1,    help="y方向の粒子数")
 
     # 物性値
     parser.add_argument("--density",   type=float, default=1000.0, help="密度 [kg/m^3]")
-    parser.add_argument("--viscosity", type=float, default=1.0e-6, help="動粘性係数 [m^2/s]")
+    parser.add_argument("--viscosity", type=float, default=0.0, help="動粘性係数 [m^2/s]")
     parser.add_argument("--sigma",     type=float, default=0.0728,  help="表面張力係数 σ [N/m]")
 
     # 時間設定
     parser.add_argument("--dt",              type=float, default=1.0e-4, help="時間刻み [s]")
     parser.add_argument("--t_end",           type=float, default=5.0,   help="終了時刻 [s]")
-    parser.add_argument("--output_interval", type=int,   default=100,    help="出力間隔 [ステップ]")
+    parser.add_argument("--output_interval", type=int,   default=1000,    help="出力間隔 [ステップ]")
 
     # ソルバー設定
     parser.add_argument("--solver_type", type=int, default=1,
                         help="ソルバー種別 (0: CG, 1: ICCG)")
+    parser.add_argument("--cmps_gradient", type=int, default=1,
+                        help="圧力勾配モデル (0: 標準, 1: CMPS対称型)")
+    parser.add_argument("--hs_mode", type=int, default=1,
+                        help="HSモード (0: 標準密度ソース, 1: High order Source term)")
     parser.add_argument("--ppe_type", type=int, default=0,
                         help="PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型)")
     parser.add_argument("--c_ppe", type=float, default=1.01,
@@ -53,7 +57,7 @@ def main():
                         help="近傍粒子数法の閾値 (method=1 のみ使用)")
 
     # 表面張力
-    parser.add_argument("--surface_tension_re_ratio", type=float, default=3.2,
+    parser.add_argument("--surface_tension_re_ratio", type=float, default=3.1,
                         help="表面張力影響半径の倍率 (re_st = ratio * l0)")
 
     # 出力先
@@ -148,7 +152,9 @@ def main():
         f.write("#\n")
         f.write("# Pressure solver\n")
         f.write(f"solver_type          {args.solver_type}\n")
+        f.write(f"cmps_gradient        {args.cmps_gradient}\n")
         f.write(f"use_analytical_lambda 0\n")
+        f.write(f"hs_mode              {args.hs_mode}\n")
         f.write(f"cg_max_iter          10000\n")
         f.write(f"cg_tolerance         1.0e-8\n")
         f.write(f"relaxation_coeff     0.2\n")

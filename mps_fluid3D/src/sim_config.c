@@ -45,11 +45,21 @@ void config_set_defaults(SimConfig *config)
     config->cg_tolerance            = 1.0e-8;
     config->relaxation_coeff        = 0.2;
     config->clamp_negative_pressure = 0;
+    config->ppe_type                = 0;       /* 0: 既存密度型, 1: Natsui弱圧縮型 */
+    config->c_ppe                   = 1.01;
+    config->gamma_ppe               = 0.01;
 
-    config->surface_threshold = 0.97;
+    config->surface_threshold        = 0.97;
+    config->surface_detection_method = 0;      /* 0: 粒子数密度, 1: 近傍粒子数 (Natsui) */
+    config->surface_count_threshold  = 0.85;
 
     config->restitution_coeff        = 0.2;
     config->collision_distance_ratio = 0.5;
+
+    config->surface_tension_enabled  = 0;
+    config->surface_tension_coeff    = 0.0728;
+    config->surface_tension_re_ratio = 3.2;
+    config->influence_radius_st      = 3.2 * 0.025;
 
     config->domain_min[0] = 0.0;
     config->domain_min[1] = 0.0;
@@ -58,7 +68,9 @@ void config_set_defaults(SimConfig *config)
     config->domain_max[1] = 0.3;
     config->domain_max[2] = 0.2;
 
+    config->cmps_gradient         = 0;
     config->use_analytical_lambda = 0;
+    config->hs_mode               = 0;       /* 0: 標準, 1: HSモード (高次ソース項) */
 
     strncpy(config->output_dir, "output", sizeof(config->output_dir) - 1);
     config->particle_file[0] = '\0';
@@ -204,12 +216,28 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->relaxation_coeff = atof(val_str);
         } else if (strcmp(key, "clamp_negative_pressure") == 0) {
             config->clamp_negative_pressure = atoi(val_str);
+        } else if (strcmp(key, "ppe_type") == 0) {
+            config->ppe_type = atoi(val_str);
+        } else if (strcmp(key, "c_ppe") == 0) {
+            config->c_ppe = atof(val_str);
+        } else if (strcmp(key, "gamma_ppe") == 0) {
+            config->gamma_ppe = atof(val_str);
         } else if (strcmp(key, "surface_threshold") == 0) {
             config->surface_threshold = atof(val_str);
+        } else if (strcmp(key, "surface_detection_method") == 0) {
+            config->surface_detection_method = atoi(val_str);
+        } else if (strcmp(key, "surface_count_threshold") == 0) {
+            config->surface_count_threshold = atof(val_str);
         } else if (strcmp(key, "restitution_coeff") == 0) {
             config->restitution_coeff = atof(val_str);
         } else if (strcmp(key, "collision_distance_ratio") == 0) {
             config->collision_distance_ratio = atof(val_str);
+        } else if (strcmp(key, "surface_tension_enabled") == 0) {
+            config->surface_tension_enabled = atoi(val_str);
+        } else if (strcmp(key, "surface_tension_coeff") == 0) {
+            config->surface_tension_coeff = atof(val_str);
+        } else if (strcmp(key, "surface_tension_re_ratio") == 0) {
+            config->surface_tension_re_ratio = atof(val_str);
         } else if (strcmp(key, "domain_x_min") == 0) {
             config->domain_min[0] = atof(val_str);
         } else if (strcmp(key, "domain_x_max") == 0) {
@@ -222,8 +250,12 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->domain_min[2] = atof(val_str);
         } else if (strcmp(key, "domain_z_max") == 0) {
             config->domain_max[2] = atof(val_str);
+        } else if (strcmp(key, "cmps_gradient") == 0) {
+            config->cmps_gradient = atoi(val_str);
         } else if (strcmp(key, "use_analytical_lambda") == 0) {
             config->use_analytical_lambda = atoi(val_str);
+        } else if (strcmp(key, "hs_mode") == 0) {
+            config->hs_mode = atoi(val_str);
         } else if (strcmp(key, "output_dir") == 0) {
             strncpy(config->output_dir, val_str, sizeof(config->output_dir) - 1);
         } else {
@@ -235,7 +267,8 @@ int config_load_params(const char *param_path, SimConfig *config)
 
     /* 影響半径の自動計算 */
     config->influence_radius_lap = config->influence_ratio_lap * config->particle_distance;
-    config->influence_radius_n = config->influence_ratio_n * config->particle_distance;
+    config->influence_radius_n   = config->influence_ratio_n   * config->particle_distance;
+    config->influence_radius_st  = config->surface_tension_re_ratio * config->particle_distance;
 
     return 0;
 }
@@ -263,7 +296,18 @@ void config_print(const SimConfig *config)
     printf("cg_tolerance:         %.2e\n", config->cg_tolerance);
     printf("relaxation_coeff:     %.4f\n", config->relaxation_coeff);
     printf("clamp_negative_pressure: %s\n", config->clamp_negative_pressure ? "ON" : "OFF");
+    printf("ppe_type:             %d  (%s)\n", config->ppe_type,
+           config->ppe_type == 1 ? "Natsui weak-compressible" : "standard density");
+    if (config->ppe_type == 1)
+        printf("  c_ppe=%.3f  gamma_ppe=%.4f\n", config->c_ppe, config->gamma_ppe);
     printf("surface_threshold:    %.4f\n", config->surface_threshold);
+    printf("surface_detection:    %s\n",
+           config->surface_detection_method == 1 ? "neighbor count (Natsui)" : "number density");
+    if (config->surface_detection_method == 1)
+        printf("  surface_count_threshold=%.3f\n", config->surface_count_threshold);
+    if (config->surface_tension_enabled)
+        printf("surface_tension:      ON  sigma=%.4e  re_ratio=%.2f\n",
+               config->surface_tension_coeff, config->surface_tension_re_ratio);
     printf("restitution_coeff:         %.4f\n", config->restitution_coeff);
     printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",
            config->collision_distance_ratio,
@@ -272,9 +316,13 @@ void config_print(const SimConfig *config)
            config->domain_min[0], config->domain_max[0],
            config->domain_min[1], config->domain_max[1],
            config->domain_min[2], config->domain_max[2]);
+    printf("cmps_gradient:        %s\n", config->cmps_gradient ? "CMPS (symmetric)" : "standard");
     printf("use_analytical_lambda: %d  (%s)\n",
            config->use_analytical_lambda,
            config->use_analytical_lambda ? "analytical" : "from initial particles");
+    printf("hs_mode:              %d  (%s)\n",
+           config->hs_mode,
+           config->hs_mode ? "ON (High order Source term)" : "OFF (standard)");
     printf("output_dir:           %s\n", config->output_dir);
     printf("particle_file:        %s\n", config->particle_file);
     printf("param_file:           %s\n", config->param_file);

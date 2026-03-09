@@ -219,6 +219,55 @@ static int solve_iccg(const double *A, double *x, const double *b,
 }
 
 /*
+ * 標準ソース項: 密度型 (ppe_type=0) または Natsui弱圧縮型 (ppe_type=1)
+ */
+static double source_term_standard(int i, const ParticleSystem *ps,
+                                   double n0, double dt, const double *vel_div)
+{
+    double dt2 = dt * dt;
+    if (g_config->ppe_type == 1) {
+        /*
+         * Natsui弱圧縮型:
+         *   b = -(ρ0/dt)·div(u*) + γ·(ρ0/dt²)·(ni*-n0)/n0
+         */
+        return -g_config->density / dt * vel_div[i]
+               + g_config->gamma_ppe * (g_config->density / dt2)
+                 * (ps->particles[i].n - n0) / n0;
+    } else {
+        /* 既存密度型: relaxation_coeff で緩和 */
+        return g_config->relaxation_coeff
+               * (g_config->density / dt2) * (ps->particles[i].n - n0) / n0;
+    }
+}
+
+/*
+ * HSソース項 (High order Source term)
+ * 近傍粒子との相対速度・相対位置から高次ソース項を計算する
+ */
+static double source_term_hs(int i, const ParticleSystem *ps,
+                             NeighborList *nl, double n0, double dt, double re)
+{
+    double sum_hst = 0.0;
+    for (int k = 0; k < nl->count[i]; k++) {
+        int j = neighbor_get(nl, i, k);
+        if (ps->particles[j].type == DUMMY_PARTICLE) continue;
+        double dr[DIM];
+        double r2 = 0.0;
+        for (int d = 0; d < DIM; d++) {
+            dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+            r2 += dr[d] * dr[d];
+        }
+        if (r2 < 1.0e-24) continue;
+        double r = sqrt(r2);
+        double dot = 0.0;
+        for (int d = 0; d < DIM; d++)
+            dot += dr[d] * (ps->particles[j].vel[d] - ps->particles[i].vel[d]);
+        sum_hst += re / (r * r * r) * dot;
+    }
+    return -(g_config->density / n0 / dt) * sum_hst;
+}
+
+/*
  * 圧力ポアソン方程式を構築・求解
  *
  * 未知数: 内部流体粒子 + 壁粒子 (ディリクレ: 自由表面流体・ダミー・ゴースト粒子は P=0)
@@ -231,14 +280,14 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
     double lambda = ps->lambda;
     double coeff = 2.0 * DIM / (n0 * lambda);
     double dt = g_config->dt;
-    double dt2 = dt * dt;
 
     /*
      * Natsui弱圧縮型PPE用: 速度発散 div(u*)_i の事前計算
      *   div(u*)_i = (d/n0) * Σ_{j≠i} [(uj* - ui*) · (rj - ri) / |rj-ri|²] * w(rij)
+     * HSモード時は使用しないためスキップ
      */
     double *vel_div = NULL;
-    if (g_config->ppe_type == 1) {
+    if (g_config->ppe_type == 1 && g_config->hs_mode == 0) {
         vel_div = (double *)calloc(n, sizeof(double));
         if (!vel_div) {
             fprintf(stderr, "Error: velocity divergence buffer allocation failed\n");
@@ -311,6 +360,7 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
         if (eq_idx[i] < 0) continue;
         int ei = eq_idx[i];
 
+        /* 行列の非対角要素と対角係数 sum_w を構築 */
         double sum_w = 0.0;
         for (int k = 0; k < nl->count[i]; k++) {
             int j = neighbor_get(nl, i, k);
@@ -322,11 +372,8 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
             }
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
-
-            if (eq_idx[j] >= 0) {
-                int ej = eq_idx[j];
-                M[ei * n_eq + ej] = -coeff * w;
-            }
+            if (eq_idx[j] >= 0)
+                M[ei * n_eq + eq_idx[j]] = -coeff * w;
             sum_w += w;
         }
 
@@ -337,23 +384,12 @@ void solve_pressure(ParticleSystem *ps, NeighborList *nl)
             M[ei * n_eq + ei] = coeff * sum_w;
 
         /* 右辺 */
-        if (ps->particles[i].type == WALL_PARTICLE) {
+        if (ps->particles[i].type == WALL_PARTICLE)
             c[ei] = 0.0;
-        } else if (g_config->ppe_type == 1) {
-            /*
-             * Natsui弱圧縮型:
-             *   LHS: (2d/λn0) Σ(Pj - c·Pi)·wij = (ρ0/dt)·div(u*) + γ·(ρ0/dt²)·(n0-ni*)/n0
-             *   行列の符号規則 (A*x = b, A = -ラプラシアン) に変換:
-             *   b = -(ρ0/dt)·div(u*) + γ·(ρ0/dt²)·(ni*-n0)/n0
-             */
-            c[ei] = -g_config->density / dt * vel_div[i]
-                    + g_config->gamma_ppe * (g_config->density / dt2)
-                      * (ps->particles[i].n - n0) / n0;
-        } else {
-            /* 既存密度型: relaxation_coeff で緩和 */
-            c[ei] = (g_config->density / dt2) * (ps->particles[i].n - n0) / n0;
-            c[ei] *= g_config->relaxation_coeff;
-        }
+        else if (g_config->hs_mode == 1)
+            c[ei] = source_term_hs(i, ps, nl, n0, dt, re);
+        else
+            c[ei] = source_term_standard(i, ps, n0, dt, vel_div);
     }
 
     /* ソルバーの選択 */

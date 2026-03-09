@@ -69,29 +69,45 @@ void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
 
 /*
  * 圧力勾配（勾配モデル）
- *   <∇P>_i = (d / n0) * Σ_{j≠i} [(P_j - P_min) / |r_j - r_i|^2]
- *            * (r_j - r_i) * w(|r_j - r_i|, re)
  *
- * P_min: 粒子i及びその近傍の最小圧力（引張不安定性対策）
+ * [標準モード: cmps_gradient=0]
+ *   dp = P_j - P_min
+ *   P_min: 粒子i及びその近傍の最小圧力（引張不安定性対策）
  *
- * 補正加速度 = -(1/ρ) * <∇P> をaccに格納
+ * [CMPSモード: cmps_gradient=1]
+ *   dp = P_i + P_j - P_i_min - P_j_min  （対称型）
+ *   P_i_min: 粒子iの近傍最小圧力
+ *   P_j_min: 粒子jの近傍最小圧力
+ *
+ * 補正加速度 = -(1/ρ) * (d/n0) * Σ [dp/r^2 * dr * w] をaccに格納
  */
 void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
 {
     double re = g_config->influence_radius_lap;
     double n0 = ps->n0;
     double grad_coeff = (double)DIM / n0;
+    double l0 = g_config->particle_distance;
+    int cmps = g_config->cmps_gradient;
+
+    /* 全粒子の近傍最小圧力を事前計算
+     * 標準モードでは p_min_arr[i] のみ使用、CMPSモードでは p_min_arr[j] も使用 */
+    double *p_min_arr = malloc(ps->num * sizeof(double));
+    if (!p_min_arr) return;
 
     for (int i = 0; i < ps->num; i++) {
-        if (ps->particles[i].type != FLUID_PARTICLE) continue;
-
-        /* 近傍粒子（自分を含む）の最小圧力を求める（引張不安定性対策） */
         double p_min = ps->particles[i].pressure;
         for (int k = 0; k < nl->count[i]; k++) {
             int j = neighbor_get(nl, i, k);
             if (ps->particles[j].pressure < p_min)
                 p_min = ps->particles[j].pressure;
         }
+        p_min_arr[i] = p_min;
+    }
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        double pi_min = p_min_arr[i];
 
         double grad[DIM];
         for (int d = 0; d < DIM; d++) grad[d] = 0.0;
@@ -104,12 +120,19 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
                 dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
                 r2 += dr[d] * dr[d];
             }
-            double l0 = g_config->particle_distance;
             if (r2 < l0 * l0 * 1.0e-12) continue;
 
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
-            double dp = ps->particles[j].pressure - p_min;
+            double dp;
+            if (cmps) {
+                /* CMPSモード: 対称型 */
+                dp = ps->particles[i].pressure + ps->particles[j].pressure
+                     - pi_min - p_min_arr[j];
+            } else {
+                /* 標準モード */
+                dp = ps->particles[j].pressure - pi_min;
+            }
 
             for (int d = 0; d < DIM; d++) {
                 grad[d] += dp / r2 * dr[d] * w;
@@ -121,6 +144,8 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
             ps->particles[i].acc[d] = -grad_coeff * grad[d] / g_config->density;
         }
     }
+
+    free(p_min_arr);
 }
 
 /*
@@ -226,6 +251,48 @@ void calc_surface_tension(ParticleSystem *ps, NeighborList *nl)
             // 加速度に加算
             for (int d = 0; d < DIM; d++) {
                 // 方向ベクトル (dr/r) を掛けてベクトル化
+                ps->particles[i].acc[d] += coeff * force_mag * (dr[d] / r);
+            }
+        }
+    }
+}
+
+/*
+ * 固液表面張力（濡れモデル）
+ *
+ * 流体粒子 i と壁粒子 j のペアに対して、液液表面張力と同じポテンシャルを
+ * 係数 C_SL で適用する。壁粒子は固定なので流体粒子の加速度のみ更新する。
+ *
+ * C_SL は接触角から計算されるが、計算ロジックは別途実装予定。
+ * 現状は particle_system_calc_initial_params で ps->C_SL に設定した値を使用。
+ */
+void calc_surface_tension_SL(ParticleSystem *ps, NeighborList *nl)
+{
+    if (ps->C_SL == 0.0) return;
+
+    double re_st = g_config->influence_radius_st;
+    double l0    = g_config->particle_distance;
+    double coeff = ps->C_SL / (g_config->density * l0 * l0);
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].type != WALL_PARTICLE) continue;
+
+            double dr[DIM], r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+            double r = sqrt(r2);
+            if (r < 1.0e-9 * l0 || r >= re_st) continue;
+
+            /* 液液と同じポテンシャル: f(r) = -(r - l0)(r - re_st) */
+            double force_mag = -(r - l0) * (r - re_st);
+
+            for (int d = 0; d < DIM; d++) {
                 ps->particles[i].acc[d] += coeff * force_mag * (dr[d] / r);
             }
         }

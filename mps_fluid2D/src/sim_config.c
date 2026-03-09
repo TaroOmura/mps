@@ -56,16 +56,21 @@ void config_set_defaults(SimConfig *config)
     config->collision_distance_ratio = 0.5;
 
     config->surface_tension_enabled  = 0;
-    config->surface_tension_coeff    = 0.073;
+    config->surface_tension_coeff    = 0.0728;
     config->surface_tension_re_ratio = 3.2;
     config->influence_radius_st      = 3.2 * 0.025;
+    config->wetting_angle_SL         = 90.0;  /* 中立濡れ */
 
     config->domain_min[0] = 0.0;
     config->domain_min[1] = 0.0;
     config->domain_max[0] = 1.0;
     config->domain_max[1] = 0.6;
 
+    config->cmps_gradient         = 0;       /* 0: 標準, 1: CMPS対称型 */
+
     config->use_analytical_lambda = 0;
+
+    config->hs_mode               = 0;       /* 0: 標準, 1: HSモード (高次ソース項) */
 
     strncpy(config->output_dir, "output", sizeof(config->output_dir) - 1);
     config->particle_file[0] = '\0';
@@ -220,6 +225,8 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->surface_tension_coeff = atof(val_str);
         } else if (strcmp(key, "surface_tension_re_ratio") == 0) {
             config->surface_tension_re_ratio = atof(val_str);
+        } else if (strcmp(key, "wetting_angle_SL") == 0) {
+            config->wetting_angle_SL = atof(val_str);
         } else if (strcmp(key, "domain_x_min") == 0) {
             config->domain_min[0] = atof(val_str);
         } else if (strcmp(key, "domain_x_max") == 0) {
@@ -228,8 +235,12 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->domain_min[1] = atof(val_str);
         } else if (strcmp(key, "domain_y_max") == 0) {
             config->domain_max[1] = atof(val_str);
+        } else if (strcmp(key, "cmps_gradient") == 0) {
+            config->cmps_gradient = atoi(val_str);
         } else if (strcmp(key, "use_analytical_lambda") == 0) {
             config->use_analytical_lambda = atoi(val_str);
+        } else if (strcmp(key, "hs_mode") == 0) {
+            config->hs_mode = atoi(val_str);
         } else if (strcmp(key, "output_dir") == 0) {
             strncpy(config->output_dir, val_str, sizeof(config->output_dir) - 1);
         } else {
@@ -290,13 +301,20 @@ void config_print(const SimConfig *config)
         printf("  surface_tension_coeff:    %.4f N/m\n", config->surface_tension_coeff);
         printf("  surface_tension_re_ratio: %.2f  (re_st = %.6f m)\n",
                config->surface_tension_re_ratio, config->influence_radius_st);
+        printf("  wetting_angle_SL:         %.2f deg\n", config->wetting_angle_SL);
     }
     printf("domain:               [%.3f, %.3f] x [%.3f, %.3f]\n",
            config->domain_min[0], config->domain_max[0],
            config->domain_min[1], config->domain_max[1]);
+    printf("cmps_gradient:        %d  (%s)\n",
+           config->cmps_gradient,
+           config->cmps_gradient ? "CMPS symmetric (P_i+P_j-P_imin-P_jmin)" : "standard (P_j-P_min)");
     printf("use_analytical_lambda: %d  (%s)\n",
            config->use_analytical_lambda,
            config->use_analytical_lambda ? "analytical" : "from initial particles");
+    printf("hs_mode:              %d  (%s)\n",
+           config->hs_mode,
+           config->hs_mode ? "ON (High order Source term)" : "OFF (standard)");
     printf("output_dir:           %s\n", config->output_dir);
     printf("particle_file:        %s\n", config->particle_file);
     printf("param_file:           %s\n", config->param_file);
