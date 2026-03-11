@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--ny",  type=int,   default=21,    help="y方向の粒子数")
     parser.add_argument("--wall_layers",  type=int, default=4, help="壁粒子の層数")
     parser.add_argument("--dummy_layers", type=int, default=4, help="ダミー粒子の層数")
+    parser.add_argument("--floor_extra",  type=int, default=20, help="床のX方向の追加マージン [粒子数]")
 
     # 物性値
     parser.add_argument("--density",   type=float, default=1000.0, help="密度 [kg/m^3]")
@@ -89,9 +90,10 @@ def main():
             particles.append((x, y, 0.0, 0.0, 0))
             n_fluid += 1
 
-    # 壁・ダミー粒子: 底面のみ、x範囲は流体ブロック幅 + 両端 (wl+dl) 層分
-    ix_min = -(wl + dl)
-    ix_max = (nx - 1) + (wl + dl)
+    # 壁・ダミー粒子: 底面のみ、x範囲は流体ブロック幅 + 両端 (wl+dl+floor_extra) 層分
+    margin = wl + dl + args.floor_extra
+    ix_min = -margin
+    ix_max = (nx - 1) + margin
     for ix in range(ix_min, ix_max + 1):
         x = ix * l0 - cx
         for jy in range(0, -(wl + dl), -1):  # j=0,-1,...,-(wl+dl-1)
