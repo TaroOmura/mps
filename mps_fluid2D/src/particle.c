@@ -171,42 +171,17 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
         }
 
         /* 2次元の場合の C_LL 決定式: C_LL = σ * l0 / sum */
-        if (sum > 0.0)
+        if (sum > 0.0){
             ps->C_LL = g_config->surface_tension_coeff * l0 / sum;
-        
-        double sum_w_LL = 0.0;
-        double sum_w_SL = 0.0;
-
-        for (int dx=0; dx<=nmax; dx++){
-            for (int dy=-nmax; dy<=nmax; dy++){
-                if (dx==0 && dy ==0){continue;}
-                double rx = l0 * dx;
-                double ry = l0 * dy;
-                double r2 = rx*rx + ry*ry;
-                double r = sqrt(r2);
-                if (r <= re_st){
-                    sum_w_LL += 1.0;
-                }
-            }
+            ps->C_SL = 0.5 * (1.0 + cos(theta))*ps->C_LL;
         }
-        for (int dx=-nmax; dx<0; dx++){
-            for (int dy=-nmax; dy<=nmax; dy++){
-                double rx = l0 * dx;
-                double ry = l0 * dy;
-                double r2 = rx*rx + ry*ry;
-                double r = sqrt(r2);
-                if (r<=re_st){
-                    sum_w_SL += 1.0;
-                }
-            }
-        }
-
-        ps->C_SL = 0.5 * (1.0 + cos(theta))*ps->C_LL * 2.0 * 17.0/11.0;//sum_w_LL / sum_w_SL;
     }
+
 
     printf("Initial params: n0 = %.6f (re_n=%.4f)  N0 = %d  lambda = %.6f (re_lap=%.4f)%s\n",
            ps->n0, re_n, ps->n0_count, ps->lambda, re_lap,
            g_config->use_analytical_lambda ? "  [analytical]" : "");
     if (g_config->surface_tension_enabled)
-        printf("  C_LL = %.6e (re_st=%.4f)\n", ps->C_LL, re_st);
+        printf("  C_LL = %.6e  C_SL = %.6e (theta=%.1f deg, re_st=%.4f)\n",
+               ps->C_LL, ps->C_SL, g_config->wetting_angle_SL, re_st);
 }

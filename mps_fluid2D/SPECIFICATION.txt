@@ -38,9 +38,18 @@
       <laplacian(u)>_i = (2D / (n0 * lambda)) * Sum_j (u_j - u_i) * w_ij
 
     勾配モデル (圧力勾配):
-      <grad(P)>_i = (D / n0) * Sum_j [(P_j - P_min) / |r_j - r_i|^2]
-                    * (r_j - r_i) * w_ij
-      ※ P_min: 近傍粒子の最小圧力 (数値安定性のため)
+      [標準モード: cmps_gradient=0]
+        dp = P_j - P_min
+        P_min: 粒子 i および近傍の最小圧力 (数値安定性のため)
+
+      [CMPSモード: cmps_gradient=1] (Khayyer & Gotoh, 2008)
+        dp = P_i + P_j - P_i_min - P_j_min  (対称型)
+        各粒子の近傍最小圧力を独立に差し引く
+
+      [Oochiモード: cmps_gradient=2] (Oochi, 2010)
+        dp = P_i + P_j  (対称型、P_min補正なし)
+
+      <grad(P)>_i = -(1/ρ) * (D/n0) * Sum_j [dp / r^2 * dr * w]
 
 
 3. 計算パラメータ
@@ -80,7 +89,9 @@
     CG法 最大反復数                  10000
     CG法 収束判定閾値                1.0e-8
     圧力の緩和係数                   0.2
-    負圧クランプ                     1 (有効)
+    負圧クランプ                     0 (デフォルト無効, 1で有効)
+    PPE定式化                        0 (既存密度型) / 1 (Natsui弱圧縮型)
+    高次ソース項 (hs_mode)           0 (デフォルト無効, 1で有効)
 
   3.5 自由表面判定
 
@@ -275,7 +286,42 @@
     パラメータ: clamp_negative_pressure (0: 無効, 1: 有効, デフォルト: 0)
 
 
-9. 粒子種別
+9. 表面張力モデル
+--------------------------------------------------------------------------------
+
+  9.1 液液表面張力 (calc_surface_tension)
+
+    Colagrossi型ポテンシャルによる粒子対力。有効化: surface_tension_enabled=1
+
+    ポテンシャル力 (scalar):
+      f(r) = -(r - l0) * (r - re_st)   (r < re_st)
+
+    液液係数 C_LL の校正 (初期化時):
+      2次元: C_LL = σ * l0 / sum   (sumは界面横断ペアのポテンシャル和)
+      加速度係数: C_LL / (ρ * l0²)
+
+    パラメータ:
+      surface_tension_coeff  = σ_LL [N/m] (デフォルト 0.0728)
+      surface_tension_re_ratio = 3.2  (re_st = ratio * l0)
+
+  9.2 固液表面張力 / 濡れモデル (calc_surface_tension_SL)
+
+    流体粒子と壁粒子のペアに液液と同じポテンシャルを係数 C_SL で適用する。
+    壁粒子は固定のため、流体粒子の加速度のみ更新する。
+
+    Young-Dupré式による係数計算:
+      C_SL = 0.5 * (1 + cos θ) * C_LL
+      θ = 0°   → 完全濡れ    C_SL = C_LL
+      θ = 90°  → 濡れなし   C_SL = 0 (デフォルト)
+      θ = 180° → 完全撥水   C_SL = -C_LL/2 (反発)
+
+    パラメータ:
+      wetting_angle_SL = θ [deg] (デフォルト 90.0)
+
+    ※ surface_tension_enabled=1 のときのみ有効
+
+
+10. 粒子種別
 --------------------------------------------------------------------------------
 
   種別              値    説明
@@ -283,12 +329,13 @@
   FLUID_PARTICLE    0     流体粒子 (計算対象)
   WALL_PARTICLE     1     壁粒子 (固定、圧力計算の境界)
   GHOST_PARTICLE    2     ゴースト粒子 (計算から除外)
+  DUMMY_PARTICLE    3     ダミー粒子 (壁粒子の粒子数密度計算にのみ使用)
 
 
-10. 出力形式
+11. 出力形式
 --------------------------------------------------------------------------------
 
-  10.1 CSV形式
+  11.1 CSV形式
 
     ファイル名: output/output_XXXXXX.csv (6桁ゼロ埋めステップ番号)
     ヘッダ行:   x,y,vx,vy,pressure,type
@@ -304,7 +351,7 @@
 
     ※ ゴースト粒子 (type=2) は出力しない
 
-  10.2 VTK形式
+  11.2 VTK形式
 
     ファイル名: output/output_XXXXXX.vtk
     形式:       VTK Legacy ASCII (Version 3.0)
@@ -319,39 +366,57 @@
     ※ ParaView で読み込み可能
 
 
-11. ファイル構成
+12. ファイル構成
 --------------------------------------------------------------------------------
 
-  mps_fluid/
+  mps_fluid2D/
   |-- Makefile                  ビルド設定
   |-- include/
-  |   |-- config.h              計算パラメータ定義
+  |   |-- config.h              定数 (DIM=2, 粒子種別)
+  |   |-- sim_config.h          SimConfig 構造体・g_config グローバルポインタ
   |   |-- particle.h            粒子・粒子系の構造体定義
   |   |-- simulation.h          シミュレーションループ
-  |   |-- operators.h           MPS演算子 (粘性・圧力勾配・粒子数密度)
+  |   |-- operators.h           MPS演算子 (粘性・圧力勾配・粒子数密度・表面張力)
   |   |-- pressure_solver.h     圧力ポアソン方程式ソルバ
   |   |-- boundary.h            境界条件・衝突処理・壁貫通防止
   |   |-- neighbor_search.h     近傍探索
   |   |-- kernel.h              カーネル重み関数
   |   |-- io.h                  入出力
   |-- src/
-  |   |-- main.c                メインプログラム・初期条件設定
+  |   |-- main.c                メインプログラム・粒子ファイル読み込み
+  |   |-- sim_config.c          設定ファイルの読み込み・管理
   |   |-- simulation.c          時間積分ループ
-  |   |-- operators.c           MPS演算子の実装
-  |   |-- pressure_solver.c     CG法による圧力ソルバ
+  |   |-- operators.c           MPS演算子の実装 (表面張力含む)
+  |   |-- pressure_solver.c     CG法 / ICCG法による圧力ソルバ
   |   |-- boundary.c            境界条件・衝突・壁貫通防止の実装
-  |   |-- neighbor_search.c     全探索による近傍探索
+  |   |-- neighbor_search.c     セルリンクリストによる近傍探索
   |   |-- kernel.c              カーネル関数の実装
-  |   |-- particle.c            粒子系の生成・管理
+  |   |-- particle.c            粒子系の生成・管理・初期パラメータ計算
   |   |-- io.c                  CSV/VTK出力
+  |-- tools/
+  |   |-- gen_dambreak.py       ダムブレイク初期条件生成
+  |   |-- gen_droplet.py        液滴振動問題初期条件生成
   |-- vis/
   |   |-- visualize.py          Python可視化スクリプト
   |-- output/                   シミュレーション出力ディレクトリ
 
 
-12. 参考文献
+13. 参考文献
 --------------------------------------------------------------------------------
 
   [1] S. Koshizuka and Y. Oka, "Moving-Particle Semi-implicit Method for
       Fragmentation of Incompressible Fluid," Nuclear Science and Engineering,
       Vol. 123, pp. 421-434, 1996.
+
+  [2] A. Khayyer and H. Gotoh, "Development of CMPS Method for Accurate
+      Water-Wave Simulation," Coastal Engineering Journal, Vol. 50, No. 2,
+      pp. 179-207, 2008.
+      → cmps_gradient=1 (CMPS対称勾配モデル)
+
+  [3] M. Oochi, S. Koshizuka, and M. Sakai, "Explicit MPS Algorithm for
+      Free Surface Flow Analysis," Transactions of JSCES, Vol. 2010, 2010.
+      → cmps_gradient=2 (Oochi対称勾配モデル, P_min補正なし)
+
+  [4] S. Natsui et al., "Stable meshfree moving particle semi-implicit
+      method for incompressible flow," Physics of Fluids, 2019.
+      → ppe_type=1 (Natsui弱圧縮型PPE), surface_detection_method=1 (近傍粒子数判定)

@@ -74,10 +74,13 @@ void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
  *   dp = P_j - P_min
  *   P_min: 粒子i及びその近傍の最小圧力（引張不安定性対策）
  *
- * [CMPSモード: cmps_gradient=1]
+ * [CMPSモード: cmps_gradient=1] (Khayyer & Gotoh, 2008)
  *   dp = P_i + P_j - P_i_min - P_j_min  （対称型）
  *   P_i_min: 粒子iの近傍最小圧力
  *   P_j_min: 粒子jの近傍最小圧力
+ *
+ * [Oochiモード: cmps_gradient=2] (Oochi, 2010)
+ *   dp = P_i + P_j  （対称型、P_min補正なし）
  *
  * 補正加速度 = -(1/ρ) * (d/n0) * Σ [dp/r^2 * dr * w] をaccに格納
  */
@@ -125,10 +128,13 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
             double dp;
-            if (cmps) {
-                /* CMPSモード: 対称型 */
+            if (cmps == 1) {
+                /* CMPSモード (Khayyer & Gotoh, 2008): 対称型 */
                 dp = ps->particles[i].pressure + ps->particles[j].pressure
                      - pi_min - p_min_arr[j];
+            } else if (cmps == 2) {
+                /* Oochiモード (Oochi, 2010): 対称型、P_min補正なし */
+                dp = ps->particles[i].pressure + ps->particles[j].pressure;
             } else {
                 /* 標準モード */
                 dp = ps->particles[j].pressure - pi_min;

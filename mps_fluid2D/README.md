@@ -87,6 +87,7 @@ python3 vis/visualize.py --fluid_only # 流体粒子のみ表示
 | `ppe_type` | 0 | PPE定式化 (0: 既存密度型, 1: Natsui弱圧縮型) |
 | `c_ppe` | 1.01 | Natsui型PPEの対角係数 c (`ppe_type=1` のみ使用) |
 | `gamma_ppe` | 0.01 | Natsui型PPEの密度補正重み γ (`ppe_type=1` のみ使用) |
+| `hs_mode` | 0 | 高次ソース項 (0: 無効, 1: 有効) |
 
 ### 自由表面判定
 
@@ -108,14 +109,15 @@ python3 vis/visualize.py --fluid_only # 流体粒子のみ表示
 | パラメータ | デフォルト値 | 説明 |
 |---|---|---|
 | `surface_tension_enabled` | 0 | 表面張力の有効化 (0: 無効, 1: 有効) |
-| `surface_tension_coeff` | 0.0728 | 表面張力係数 σ [N/m] |
+| `surface_tension_coeff` | 0.0728 | 液液表面張力係数 σ_LL [N/m] |
 | `surface_tension_re_ratio` | 3.2 | 表面張力影響半径の倍率 (re_st = ratio × l0) |
+| `wetting_angle_SL` | 90.0 | 静的接触角 θ [deg] — 固液表面張力係数 C_SL = 0.5(1+cosθ)×C_LL (Young-Dupré式) で計算される。θ=90° のとき C_SL=0 (濡れなし)。`surface_tension_enabled=1` のとき流体-壁粒子ペアに適用される。 |
 
 ### 圧力勾配・λ
 
 | パラメータ | デフォルト値 | 説明 |
 |---|---|---|
-| `cmps_gradient` | 0 | 圧力勾配モデル (0: 標準 P_j-P_min, 1: CMPS対称型 P_i+P_j-P_imin-P_jmin) |
+| `cmps_gradient` | 0 | 圧力勾配モデル (0: 標準 P_j-P_min, 1: CMPS対称型 P_i+P_j-P_imin-P_jmin (Khayyer & Gotoh 2008), 2: Oochi対称型 P_i+P_j (Oochi 2010)) |
 | `use_analytical_lambda` | 0 | λの計算方法 (0: 初期粒子配置から計算, 1: 解析解) |
 
 ### 計算領域

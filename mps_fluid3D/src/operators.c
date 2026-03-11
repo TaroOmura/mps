@@ -74,10 +74,13 @@ void calc_viscosity_term(ParticleSystem *ps, NeighborList *nl)
  *   dp = P_j - P_min
  *   P_min: 粒子i及びその近傍の最小圧力（引張不安定性対策）
  *
- * [CMPSモード: cmps_gradient=1]
+ * [CMPSモード: cmps_gradient=1] (Khayyer & Gotoh, 2008)
  *   dp = P_i + P_j - P_i_min - P_j_min  （対称型）
  *   P_i_min: 粒子iの近傍最小圧力
  *   P_j_min: 粒子jの近傍最小圧力
+ *
+ * [Oochiモード: cmps_gradient=2] (Oochi, 2010)
+ *   dp = P_i + P_j  （対称型、P_min補正なし）
  *
  * 補正加速度 = -(1/ρ) * (d/n0) * Σ [dp/r^2 * dr * w] をaccに格納
  */
@@ -125,10 +128,13 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
             double r = sqrt(r2);
             double w = kernel_weight(r, re);
             double dp;
-            if (cmps) {
-                /* CMPSモード: 対称型 */
+            if (cmps == 1) {
+                /* CMPSモード (Khayyer & Gotoh, 2008): 対称型 */
                 dp = ps->particles[i].pressure + ps->particles[j].pressure
                      - pi_min - p_min_arr[j];
+            } else if (cmps == 2) {
+                /* Oochiモード (Oochi, 2010): 対称型、P_min補正なし */
+                dp = ps->particles[i].pressure + ps->particles[j].pressure;
             } else {
                 /* 標準モード */
                 dp = ps->particles[j].pressure - pi_min;
@@ -247,6 +253,43 @@ void calc_surface_tension(ParticleSystem *ps, NeighborList *nl)
 
             /* ポテンシャルの負の微分 = 粒子間力
              * r < l0 → 斥力, l0 < r < re_st → 引力 */
+            double force_mag = -(r - l0) * (r - re_st);
+
+            for (int d = 0; d < DIM; d++)
+                ps->particles[i].acc[d] += coeff * force_mag * (dr[d] / r);
+        }
+    }
+}
+
+/*
+ * 固液表面張力（濡れモデル）
+ *   流体粒子 i と壁粒子 j のペアに対して液液と同じポテンシャルを C_SL で適用する。
+ *   壁粒子は固定なので流体粒子の加速度のみ更新する。
+ *   C_SL = 0.5*(1+cosθ)*C_LL  (Young-Dupré式)
+ */
+void calc_surface_tension_SL(ParticleSystem *ps, NeighborList *nl)
+{
+    if (ps->C_SL == 0.0) return;
+
+    double re_st = g_config->influence_radius_st;
+    double l0    = g_config->particle_distance;
+    double coeff = ps->C_SL / (g_config->density * l0 * l0 * l0);
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].type != WALL_PARTICLE) continue;
+
+            double dr[DIM], r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+            double r = sqrt(r2);
+            if (r < 1.0e-9 * l0 || r >= re_st) continue;
+
             double force_mag = -(r - l0) * (r - re_st);
 
             for (int d = 0; d < DIM; d++)

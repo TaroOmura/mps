@@ -21,6 +21,7 @@ ParticleSystem *particle_system_create(int capacity)
     ps->n0 = 0.0;
     ps->lambda = 0.0;
     ps->C_LL = 0.0;
+    ps->C_SL = 0.0;
     ps->n0_count = 0;
     return ps;
 }
@@ -172,13 +173,17 @@ void particle_system_calc_initial_params(ParticleSystem *ps)
                 }
             }
         }
-        if (sum > 0.0)
+        if (sum > 0.0) {
             ps->C_LL = g_config->surface_tension_coeff * l0 * l0 / sum;
+            double theta = g_config->wetting_angle_SL * M_PI / 180.0;
+            ps->C_SL = 0.5 * (1.0 + cos(theta)) * ps->C_LL;
+        }
     }
 
     printf("Initial params: n0 = %.6f (re_n=%.4f)  N0 = %d  lambda = %.6f (re_lap=%.4f)%s\n",
            ps->n0, re_n, ps->n0_count, ps->lambda, re_lap,
            g_config->use_analytical_lambda ? "  [analytical]" : "");
     if (g_config->surface_tension_enabled)
-        printf("  C_LL = %.6e (re_st=%.4f)\n", ps->C_LL, re_st);
+        printf("  C_LL = %.6e  C_SL = %.6e (theta=%.1f deg, re_st=%.4f)\n",
+               ps->C_LL, ps->C_SL, g_config->wetting_angle_SL, re_st);
 }

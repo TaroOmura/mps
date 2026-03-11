@@ -61,7 +61,7 @@ typedef struct {
     double domain_max[DIM];      /* 領域の最大座標 */
 
     /* 圧力勾配モデル */
-    int    cmps_gradient;         /* 対称型勾配 (0: 標準 P_j-P_min, 1: CMPS P_i+P_j-P_imin-P_jmin) */
+    int    cmps_gradient;         /* 勾配モデル (0: 標準 P_j-P_min, 1: CMPS P_i+P_j-P_imin-P_jmin (Khayyer&Gotoh2008), 2: Oochi P_i+P_j (Oochi2010)) */
 
     /* λ計算方法 */
     int    use_analytical_lambda; /* λを解析解で計算 (0: 初期粒子配置から計算, 1: 解析解) */
