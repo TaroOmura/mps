@@ -93,24 +93,28 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
     int cmps = g_config->cmps_gradient;
 
     /* 全粒子の近傍最小圧力を事前計算
-     * 標準モードでは p_min_arr[i] のみ使用、CMPSモードでは p_min_arr[j] も使用 */
-    double *p_min_arr = malloc(ps->num * sizeof(double));
-    if (!p_min_arr) return;
+     * 標準モードでは p_min_arr[i] のみ使用、CMPSモードでは p_min_arr[j] も使用
+     * Oochiモード (cmps==2) ではP_min不使用のためスキップ */
+    double *p_min_arr = NULL;
+    if (cmps != 2) {
+        p_min_arr = malloc(ps->num * sizeof(double));
+        if (!p_min_arr) return;
 
-    for (int i = 0; i < ps->num; i++) {
-        double p_min = ps->particles[i].pressure;
-        for (int k = 0; k < nl->count[i]; k++) {
-            int j = neighbor_get(nl, i, k);
-            if (ps->particles[j].pressure < p_min)
-                p_min = ps->particles[j].pressure;
+        for (int i = 0; i < ps->num; i++) {
+            double p_min = ps->particles[i].pressure;
+            for (int k = 0; k < nl->count[i]; k++) {
+                int j = neighbor_get(nl, i, k);
+                if (ps->particles[j].pressure < p_min)
+                    p_min = ps->particles[j].pressure;
+            }
+            p_min_arr[i] = p_min;
         }
-        p_min_arr[i] = p_min;
     }
 
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
 
-        double pi_min = p_min_arr[i];
+        double pi_min = p_min_arr ? p_min_arr[i] : 0.0;
 
         double grad[DIM];
         for (int d = 0; d < DIM; d++) grad[d] = 0.0;

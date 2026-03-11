@@ -110,19 +110,23 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
     int n = ps->num;
     int max_nb = nl->max_neighbors;
 
-    double *p_min_arr = malloc(n * sizeof(double));
-    if (!p_min_arr) return;
+    /* Oochiモード (cmps==2) ではP_min不使用のためスキップ */
+    double *p_min_arr = NULL;
+    if (cmps != 2) {
+        p_min_arr = malloc(n * sizeof(double));
+        if (!p_min_arr) return;
 
-    /* ステップ1: 各粒子の近傍最小圧力を計算 (並列) */
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < n; i++) {
-        double p_min = ps->particles[i].pressure;
-        for (int k = 0; k < nl->count[i]; k++) {
-            int j = nl->neighbors[i * max_nb + k];
-            if (ps->particles[j].pressure < p_min)
-                p_min = ps->particles[j].pressure;
+        /* ステップ1: 各粒子の近傍最小圧力を計算 (並列) */
+        #pragma omp parallel for schedule(static)
+        for (int i = 0; i < n; i++) {
+            double p_min = ps->particles[i].pressure;
+            for (int k = 0; k < nl->count[i]; k++) {
+                int j = nl->neighbors[i * max_nb + k];
+                if (ps->particles[j].pressure < p_min)
+                    p_min = ps->particles[j].pressure;
+            }
+            p_min_arr[i] = p_min;
         }
-        p_min_arr[i] = p_min;
     }
 
     /* ステップ2: 圧力勾配の計算 (並列)
@@ -133,7 +137,7 @@ void calc_pressure_gradient(ParticleSystem *ps, NeighborList *nl)
     for (int i = 0; i < n; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;
 
-        double pi_min = p_min_arr[i];
+        double pi_min = p_min_arr ? p_min_arr[i] : 0.0;
 
         double grad[DIM];
         for (int d = 0; d < DIM; d++) grad[d] = 0.0;

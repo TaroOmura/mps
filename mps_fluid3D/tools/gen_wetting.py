@@ -49,7 +49,7 @@ def main():
 
     # ソルバー設定
     parser.add_argument("--solver_type",   type=int, default=1, help="ソルバー種別 (0: CG, 1: ICCG)")
-    parser.add_argument("--cmps_gradient", type=int, default=1, help="圧力勾配モデル (0: 標準, 1: CMPS対称型)")
+    parser.add_argument("--cmps_gradient", type=int, default=2, help="圧力勾配モデル (0: 標準, 1: CMPS対称型, 2: Oochi対称型)")
     parser.add_argument("--hs_mode",       type=int, default=1, help="HSモード (0: 標準, 1: High order)")
     parser.add_argument("--ppe_type",      type=int, default=0, help="PPE定式化 (0: 密度型, 1: Natsui型)")
     parser.add_argument("--c_ppe",         type=float, default=1.01, help="Natsui型PPEの対角係数 c")

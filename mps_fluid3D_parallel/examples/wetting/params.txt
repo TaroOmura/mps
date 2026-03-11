@@ -1,0 +1,60 @@
+# MPS 3D Wetting Parameters
+#
+# Particle
+particle_distance    0.0001
+influence_ratio_lap  3.1
+influence_ratio_n    3.1
+max_neighbors        512
+wall_layers          4
+dummy_layers         4
+#
+# Material
+density              1000.0
+viscosity            1.36e-06
+gravity_x            0.0
+gravity_y            -9.81
+gravity_z            0.0
+#
+# Time
+dt                   1e-05
+t_end                0.1
+output_interval      100
+#
+# Pressure solver
+solver_type          1
+cmps_gradient        2
+use_analytical_lambda 0
+hs_mode              1
+cg_max_iter          10000
+cg_tolerance         1.0e-8
+relaxation_coeff     1.0
+clamp_negative_pressure 1
+ppe_type             0
+c_ppe                1.01
+gamma_ppe            0.01
+#
+# Free surface
+surface_threshold    0.85
+surface_detection_method 0
+surface_count_threshold  0.85
+#
+# Collision model
+restitution_coeff        0.2
+collision_distance_ratio 0.3
+#
+# Surface tension
+surface_tension_enabled  1
+surface_tension_coeff    0.0728
+surface_tension_re_ratio 3.1
+wetting_angle_SL         90.0
+#
+# Domain
+domain_x_min         -0.001800
+domain_x_max         0.001800
+domain_y_min         -0.000800
+domain_y_max         0.003300
+domain_z_min         -0.001800
+domain_z_max         0.001800
+#
+# Output
+output_dir           output/wetting
