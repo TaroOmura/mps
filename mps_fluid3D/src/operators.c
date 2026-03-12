@@ -303,6 +303,195 @@ void calc_surface_tension_SL(ParticleSystem *ps, NeighborList *nl)
 }
 
 /*
+ * ハイブリッド摩擦モデル (Hattori & Koshizuka 2019, Mechanical Engineering Journal)
+ *
+ * 接触線粒子の判定:
+ *   - WALL粒子が re_st 内に存在する
+ *   - かつ流体粒子のみの局所粒子数密度 n_f < surface_threshold * n0
+ *     (標準の on_surface は壁粒子込みの n を使うため接触線で誤検出するため使わない)
+ *
+ * 壁法線の推定 (平面・球面・任意曲面に対応):
+ *   1. 流体粒子 i の近傍から最近傍壁粒子 j* を特定する
+ *   2. j* の近傍リスト内の WALL粒子群を用いて j* における壁外向き法線を推定:
+ *        n_w = Σ_{k=WALL in nl[j*]} w(r) * (j* - k)/|j* - k|  → 正規化
+ *      → 平面壁: 隣接壁粒子が平面状に並ぶため垂直成分のみ残る
+ *      → 球面壁: 放射方向に向く（任意曲面に対応）
+ *
+ * 自由表面外向き法線の推定:
+ *   n_lv = -Σ_{j=FLUID in nl[i]} w(r) * (j - i)/|j - i|  → 正規化
+ *   (液体内部方向の逆 = 気体側への外向き法線)
+ *
+ * 接触角の計算:
+ *   cos(θ_i) = -n_w · n_lv
+ *
+ * 滑り方向ベクトル (n_lv の壁接線面への射影):
+ *   e_slide = (n_lv - (n_lv · n_w) * n_w)  → 正規化
+ *
+ * ハイブリッド切り替え (v_c = friction_velocity_threshold):
+ *   |v_i| <= v_c → 静摩擦: |θ_i - θ_s| <= Δθ_c なら vel[i] = 0
+ *   |v_i| >  v_c → 動摩擦: 滑り速度成分を直接減衰させる (vel を直接修正)
+ *                    Δv_n = -dt · α · ν · (2D/n0λ) · Σ_{j=WALL} w(r_ij) · v_n
+ *                    v_n = v_i · e_slide (滑り速度成分)
+ *                    注: acc は implicit ステップで上書きされるため vel に直接作用する
+ */
+void apply_friction(ParticleSystem *ps, NeighborList *nl)
+{
+    if (!g_config->friction_enabled) return;
+
+    double re_st    = g_config->influence_radius_st;
+    double l0       = g_config->particle_distance;
+    double theta_s  = g_config->wetting_angle_SL    * M_PI / 180.0;
+    double delta_th = g_config->friction_delta_theta * M_PI / 180.0;
+    double v_c      = g_config->friction_velocity_threshold;
+    double alpha    = g_config->dynamic_friction_alpha;
+    double nu       = g_config->viscosity;
+    double dyn_coeff = alpha * nu * 2.0 * DIM / (ps->n0 * ps->lambda);
+
+    double re_n      = g_config->influence_radius_n;
+    double surf_thr  = g_config->surface_threshold;
+
+    for (int i = 0; i < ps->num; i++) {
+        if (ps->particles[i].type != FLUID_PARTICLE) continue;
+
+        /* --- Step 1: 接触線検出 ---
+         * 標準の on_surface フラグは壁粒子込みの n で判定するため、
+         * 液滴底部（壁粒子が下にある）では n ≈ n0 となり on_surface=0 になる。
+         * ここでは (a) 流体粒子のみの局所粒子数密度 n_f が surf_thr*n0 未満
+         *          (b) かつ WALL粒子が re_st 内に存在
+         * の両方を満たす粒子を接触線粒子とする。 */
+        double n_fluid = 0.0;
+        int    j_star  = -1;
+        double r2_star = 1.0e30;
+
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            double r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += diff * diff;
+            }
+            if (ps->particles[j].type == FLUID_PARTICLE) {
+                if (r2 < re_n * re_n)
+                    n_fluid += kernel_weight(sqrt(r2), re_n);
+            } else if (ps->particles[j].type == WALL_PARTICLE) {
+                if (r2 < re_st * re_st && r2 < r2_star) {
+                    r2_star = r2; j_star = j;
+                }
+            }
+        }
+        if (j_star < 0) continue;                        /* 壁近傍でない */
+        if (n_fluid >= surf_thr * ps->n0) continue;      /* 流体内部粒子 */
+
+        /* --- Step 2: j* の近傍 WALL粒子群から壁法線 n_w を推定 --- */
+        double n_w[DIM] = {0.0, 0.0, 0.0};
+        for (int k = 0; k < nl->count[j_star]; k++) {
+            int m = neighbor_get(nl, j_star, k);
+            if (ps->particles[m].type != WALL_PARTICLE) continue;
+            double dr[DIM], r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j_star].pos[d] - ps->particles[m].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+            double r = sqrt(r2);
+            if (r < 1.0e-9 * l0) continue;
+            double w = kernel_weight(r, re_st);
+            for (int d = 0; d < DIM; d++)
+                n_w[d] += w * dr[d] / r;
+        }
+        double n_w_mag = 0.0;
+        for (int d = 0; d < DIM; d++) n_w_mag += n_w[d] * n_w[d];
+        n_w_mag = sqrt(n_w_mag);
+        if (n_w_mag < 1.0e-9) continue;
+        for (int d = 0; d < DIM; d++) n_w[d] /= n_w_mag;
+
+        /* --- Step 3: nl[i] の FLUID粒子から自由表面外向き法線 n_lv を推定 --- */
+        double n_lv[DIM] = {0.0, 0.0, 0.0};
+        int fluid_count = 0;
+        for (int k = 0; k < nl->count[i]; k++) {
+            int j = neighbor_get(nl, i, k);
+            if (ps->particles[j].type != FLUID_PARTICLE) continue;
+            double dr[DIM], r2 = 0.0;
+            for (int d = 0; d < DIM; d++) {
+                dr[d] = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                r2 += dr[d] * dr[d];
+            }
+            double r = sqrt(r2);
+            if (r < 1.0e-9 * l0) continue;
+            double w = kernel_weight(r, re_st);
+            for (int d = 0; d < DIM; d++)
+                n_lv[d] -= w * dr[d] / r;  /* 液体内部方向の逆 = 外向き */
+            fluid_count++;
+        }
+        if (fluid_count == 0) continue;
+        double n_lv_mag = 0.0;
+        for (int d = 0; d < DIM; d++) n_lv_mag += n_lv[d] * n_lv[d];
+        n_lv_mag = sqrt(n_lv_mag);
+        if (n_lv_mag < 1.0e-9) continue;
+        for (int d = 0; d < DIM; d++) n_lv[d] /= n_lv_mag;
+
+        /* --- Step 4: 接触角 θ_i --- */
+        double cos_th = 0.0;
+        for (int d = 0; d < DIM; d++)
+            cos_th -= n_w[d] * n_lv[d];  /* cos(θ) = -n_w · n_lv */
+        cos_th = fmax(-1.0, fmin(1.0, cos_th));
+        double theta_i = acos(cos_th);
+
+        /* --- Step 5: 滑り方向ベクトル e_slide (n_lv の壁接線面射影) --- */
+        double dot_lv_w = 0.0;
+        for (int d = 0; d < DIM; d++)
+            dot_lv_w += n_lv[d] * n_w[d];
+        double e_slide[DIM];
+        double e_slide_mag = 0.0;
+        for (int d = 0; d < DIM; d++) {
+            e_slide[d] = n_lv[d] - dot_lv_w * n_w[d];
+            e_slide_mag += e_slide[d] * e_slide[d];
+        }
+        e_slide_mag = sqrt(e_slide_mag);
+        if (e_slide_mag < 1.0e-9) continue;
+        for (int d = 0; d < DIM; d++) e_slide[d] /= e_slide_mag;
+
+        /* --- Step 6: 速度の大きさで静/動を切り替え --- */
+        double v2 = 0.0;
+        for (int d = 0; d < DIM; d++)
+            v2 += ps->particles[i].vel[d] * ps->particles[i].vel[d];
+
+        if (sqrt(v2) <= v_c) {
+            /* 静摩擦: 接触角偏差が閾値以内なら仮速度をゼロに固定 */
+            if (fabs(theta_i - theta_s) <= delta_th) {
+                for (int d = 0; d < DIM; d++)
+                    ps->particles[i].vel[d] = 0.0;
+            }
+        } else {
+            /* 動摩擦: 滑り方向速度成分を直接減衰させる
+             *   Δv_n = -dt · α · ν · (2D/n0λ) · Σ_{j=WALL} w(r_ij) · v_n
+             * acc は implicit ステップで上書きされるため vel を直接修正する */
+            double sum_w_wall = 0.0;
+            for (int k = 0; k < nl->count[i]; k++) {
+                int j = neighbor_get(nl, i, k);
+                if (ps->particles[j].type != WALL_PARTICLE) continue;
+                double r2 = 0.0;
+                for (int d = 0; d < DIM; d++) {
+                    double diff = ps->particles[j].pos[d] - ps->particles[i].pos[d];
+                    r2 += diff * diff;
+                }
+                double r = sqrt(r2);
+                if (r < 1.0e-9 * l0) continue;
+                sum_w_wall += kernel_weight(r, re_st);
+            }
+            double v_n = 0.0;
+            for (int d = 0; d < DIM; d++)
+                v_n += ps->particles[i].vel[d] * e_slide[d];
+            /* Δv_n: 符号をv_nと逆に、大きさはmin(|dyn_coeff*dt*Σw*v_n|, |v_n|) */
+            double dv_n = -dyn_coeff * g_config->dt * sum_w_wall * v_n;
+            if (dv_n >  v_n) dv_n =  v_n;   /* 逆転防止 */
+            if (dv_n < -v_n) dv_n = -v_n;
+            for (int d = 0; d < DIM; d++)
+                ps->particles[i].vel[d] += dv_n * e_slide[d];
+        }
+    }
+}
+
+/*
  * 粒子間衝突モデル（越塚 2003 に基づく）
  *
  * 粒子間距離が collision_dist = collision_distance_ratio * l0 を下回り、かつ接近中

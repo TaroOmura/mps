@@ -69,6 +69,12 @@ typedef struct {
     /* HSモード (High order Source term) */
     int    hs_mode;               /* 0: 標準ソース項, 1: 高次ソース項 (HS) */
 
+    /* 摩擦モデル: ハイブリッド静/動摩擦 (Hattori & Koshizuka 2019) */
+    int    friction_enabled;            /* 0: 無効, 1: 有効 (ハイブリッドモード) */
+    double friction_delta_theta;        /* 静摩擦: 臨界接触角偏差 Δθ_c [deg] (default 30.0) */
+    double dynamic_friction_alpha;      /* 動摩擦: 抵抗係数 α (default 600.0) */
+    double friction_velocity_threshold; /* 切り替え臨界速度 v_c [m/s] (default 0.01) */
+
     /* 出力設定 */
     char   output_dir[256];     /* 出力ディレクトリ */
 

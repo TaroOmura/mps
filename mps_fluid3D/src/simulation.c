@@ -48,6 +48,10 @@ void simulation_step(ParticleSystem *ps, NeighborList *nl, CellList *cl, int ste
         }
     }
 
+    /* ハイブリッド摩擦モデル (Hattori & Koshizuka 2019) */
+    if (g_config->friction_enabled)
+        apply_friction(ps, nl);
+
     /* 仮位置の更新 */
     for (int i = 0; i < ps->num; i++) {
         if (ps->particles[i].type != FLUID_PARTICLE) continue;

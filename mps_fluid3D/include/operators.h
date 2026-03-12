@@ -35,4 +35,10 @@ void calc_surface_tension(ParticleSystem *ps, NeighborList *nl);
 /* ポテンシャル型表面張力 固液・濡れモデル (accに加算) */
 void calc_surface_tension_SL(ParticleSystem *ps, NeighborList *nl);
 
+/* ハイブリッド摩擦モデル (Hattori & Koshizuka 2019)
+ *   |v_i| <= v_c: 静摩擦 (|θ_i - θ_s| <= Δθ_c なら vel = 0)
+ *   |v_i| >  v_c: 動摩擦 (接触線法線方向の抵抗力を acc に加算)
+ * 壁法線は最近傍壁粒子の近傍壁粒子群から推定（平面・球面・任意曲面に対応） */
+void apply_friction(ParticleSystem *ps, NeighborList *nl);
+
 #endif /* OPERATORS_H */

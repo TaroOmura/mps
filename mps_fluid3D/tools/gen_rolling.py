@@ -73,6 +73,12 @@ def main():
     parser.add_argument("--surface_detection_method", type=int,   default=0,    help="自由表面判定法 (0: 粒子数密度, 1: 近傍粒子数)")
     parser.add_argument("--surface_count_threshold",  type=float, default=0.85, help="近傍粒子数法の閾値")
 
+    # 摩擦モデル (Hattori & Koshizuka 2019)
+    parser.add_argument("--friction_enabled",            type=int,   default=0,    help="ハイブリッド摩擦モデル (0: 無効, 1: 有効)")
+    parser.add_argument("--friction_delta_theta",        type=float, default=30.0, help="静摩擦: 臨界接触角偏差 Δθ_c [deg]")
+    parser.add_argument("--dynamic_friction_alpha",      type=float, default=600.0,help="動摩擦: 抵抗係数 α")
+    parser.add_argument("--friction_velocity_threshold", type=float, default=0.01, help="静/動摩擦切り替え臨界速度 v_c [m/s]")
+
     # 出力先
     parser.add_argument("--outdir",     type=str, default="examples/rolling", help="ファイル出力先ディレクトリ")
     parser.add_argument("--output_dir", type=str, default="output/rolling",   help="シミュレーション出力ディレクトリ名")
@@ -94,10 +100,11 @@ def main():
     cx = (nx - 1) * l0 / 2.0
     cz = (nz - 1) * l0 / 2.0
 
-    # 等価半径の半分を初期ギャップとする
+    # 等価半径（参考表示用）
     volume = nx * ny * nz * l0 ** 3
     R_eq = (3.0 * volume / (4.0 * math.pi)) ** (1.0 / 3.0)
-    gap_l0 = max(1, round(R_eq / (2.0 * l0)))
+    # 初期ギャップ: 1粒子層（壁との表面張力・摩擦が即座に作用するよう近接配置）
+    gap_l0 = 1
 
     # ---- 粒子生成 ----
     particles = []
@@ -160,6 +167,9 @@ def main():
     print(f"Equivalent sphere R: {R_eq*1e3:.2f} mm")
     print(f"Capillary dt limit:  {dt_cap*1e3:.4f} ms  (dt={args.dt*1e3:.4f} ms)")
     print(f"Wetting angle: {args.wetting_angle_SL} deg")
+    if args.friction_enabled:
+        print(f"Friction: ON (hybrid)  delta_theta={args.friction_delta_theta} deg  "
+              f"alpha={args.dynamic_friction_alpha}  v_c={args.friction_velocity_threshold} m/s")
     print(f"Estimated travel (free accel): {travel_est*1e3:.1f} mm in {args.t_end*1e3:.0f} ms")
     print(f"Particles: {n_fluid} fluid, {n_wall} wall, {n_dummy} dummy, {n_total} total")
 
@@ -233,6 +243,12 @@ def main():
         f.write(f"surface_tension_coeff    {args.sigma}\n")
         f.write(f"surface_tension_re_ratio {args.surface_tension_re_ratio}\n")
         f.write(f"wetting_angle_SL         {args.wetting_angle_SL}\n")
+        f.write("#\n")
+        f.write("# Friction model (Hattori & Koshizuka 2019)\n")
+        f.write(f"friction_enabled             {args.friction_enabled}\n")
+        f.write(f"friction_delta_theta         {args.friction_delta_theta}\n")
+        f.write(f"dynamic_friction_alpha       {args.dynamic_friction_alpha}\n")
+        f.write(f"friction_velocity_threshold  {args.friction_velocity_threshold}\n")
         f.write("#\n")
         f.write("# Domain\n")
         f.write(f"domain_x_min         {wall_x_min:.6f}\n")

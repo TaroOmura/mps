@@ -73,6 +73,11 @@ void config_set_defaults(SimConfig *config)
     config->use_analytical_lambda = 0;
     config->hs_mode               = 0;       /* 0: 標準, 1: HSモード (高次ソース項) */
 
+    config->friction_enabled            = 0;
+    config->friction_delta_theta        = 30.0;
+    config->dynamic_friction_alpha      = 600.0;
+    config->friction_velocity_threshold = 0.01;
+
     strncpy(config->output_dir, "output", sizeof(config->output_dir) - 1);
     config->particle_file[0] = '\0';
     config->param_file[0]    = '\0';
@@ -259,6 +264,14 @@ int config_load_params(const char *param_path, SimConfig *config)
             config->use_analytical_lambda = atoi(val_str);
         } else if (strcmp(key, "hs_mode") == 0) {
             config->hs_mode = atoi(val_str);
+        } else if (strcmp(key, "friction_enabled") == 0) {
+            config->friction_enabled = atoi(val_str);
+        } else if (strcmp(key, "friction_delta_theta") == 0) {
+            config->friction_delta_theta = atof(val_str);
+        } else if (strcmp(key, "dynamic_friction_alpha") == 0) {
+            config->dynamic_friction_alpha = atof(val_str);
+        } else if (strcmp(key, "friction_velocity_threshold") == 0) {
+            config->friction_velocity_threshold = atof(val_str);
         } else if (strcmp(key, "output_dir") == 0) {
             strncpy(config->output_dir, val_str, sizeof(config->output_dir) - 1);
         } else {
@@ -312,6 +325,10 @@ void config_print(const SimConfig *config)
         printf("surface_tension:      ON  sigma=%.4e  re_ratio=%.2f  theta_SL=%.1f deg\n",
                config->surface_tension_coeff, config->surface_tension_re_ratio,
                config->wetting_angle_SL);
+    if (config->friction_enabled)
+        printf("friction:             ON (hybrid)  delta_theta=%.1f deg  alpha=%.1f  v_c=%.4f m/s  (theta_s=%.1f deg)\n",
+               config->friction_delta_theta, config->dynamic_friction_alpha,
+               config->friction_velocity_threshold, config->wetting_angle_SL);
     printf("restitution_coeff:         %.4f\n", config->restitution_coeff);
     printf("collision_distance_ratio:  %.4f  (col_dist = %.6f m)\n",
            config->collision_distance_ratio,
